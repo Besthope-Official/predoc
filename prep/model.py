@@ -8,15 +8,11 @@ import numpy as np
 from tqdm import tqdm
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
-from typing import Dict, Optional
-import logging
+from typing import Dict
 from functools import lru_cache
 
 from config.model import CONFIG
-
-logging.basicConfig(level=logging.INFO,
-                    format='%(asctime)s - %(levelname)s - %(message)s')
-logger = logging.getLogger(__name__)
+from loguru import logger
 
 
 @lru_cache(maxsize=8)
