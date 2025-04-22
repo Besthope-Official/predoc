@@ -1,45 +1,37 @@
 # DOCKER_BUILDKIT=1 docker build -t rag:latest .
 
 ARG CUDA_VERSION=11.8.0
-ARG CUDA_TAG=${CUDA_VERSION}-base-ubuntu22.04
+FROM nvcr.io/nvidia/cuda:${CUDA_VERSION}-devel-ubuntu22.04
 
-FROM nvcr.io/nvidia/cuda:${CUDA_TAG}
+ENV DEBIAN_FRONTEND=noninteractive
 
 RUN sed -i 's/http:\/\/archive.ubuntu.com\/ubuntu\//http:\/\/mirrors.aliyun.com\/ubuntu\//g' /etc/apt/sources.list && \
     sed -i 's/http:\/\/security.ubuntu.com\/ubuntu\//http:\/\/mirrors.aliyun.com\/ubuntu\//g' /etc/apt/sources.list
 
-RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y wget curl git && \
-    rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget curl git poppler-utils ghostscript tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim libgl1-mesa-glx \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV CONDA_DIR /opt/conda
-RUN wget --quiet https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh && \
-    /bin/bash ~/miniconda.sh -b -p $CONDA_DIR && \
-    rm ~/miniconda.sh
+ENV PATH $CONDA_DIR/bin:$PATH
 
-ENV PATH=$CONDA_DIR/bin:$PATH
+RUN conda create -y --name rag-env python=3.10 && \
+    conda clean -afy
 
-RUN conda create -y --name rag-env python=3.10
-ENV CONDA_DEFAULT_ENV=rag-env
-ENV CONDA_PREFIX=$CONDA_DIR/envs/$CONDA_DEFAULT_ENV
-ENV PATH=$CONDA_PREFIX/bin:$PATH
+SHELL ["conda", "run", "-n", "rag-env", "/bin/bash", "-c"]
+
+RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+
+# Install Python dependencies with cache
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 && \
+    pip install -r requirements.txt
+
+RUN python -m spacy download en_core_web_sm && \
+    python -m spacy download zh_core_web_sm
 
 WORKDIR /app
 COPY . /app/
 
-RUN apt-get update && apt-get install -y \
-    poppler-utils \
-    ghostscript \
-    tesseract-ocr \
-    tesseract-ocr-eng \
-    tesseract-ocr-chi-sim \
-    libgl1-mesa-glx
-
-# use cache for rebuilding python packages
-RUN --mount=type=cache,target=/root/.cache/pip \
-    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118 && \
-    chmod +x setup.sh && \
-    ./setup.sh
-
 EXPOSE 8000
-
-CMD ["python", "run.py"]
+CMD ["conda", "run", "-n", "rag-env", "python", "run.py"]
