@@ -1,13 +1,15 @@
 '''消费文档预处理的任务'''
 from pydantic import BaseModel, Field
+from typing import Optional
+from enum import Enum
 from uuid import UUID
 from datetime import datetime
-import json
 from loguru import logger
-from enum import Enum, auto
 
 import pika
+import json
 from config.backend import RabbitMQConfig
+from preprocess import preprocess
 
 
 class TaskStatus(str, Enum):
@@ -22,19 +24,41 @@ class TaskStatus(str, Enum):
 
     @classmethod
     def from_string(cls, status_str):
-        """从字符串创建TaskStatus枚举"""
         try:
             return cls(status_str.upper())
         except ValueError:
             return cls.PENDING
 
 
+class Author(BaseModel):
+    name: str
+    institution: str
+
+
+class Keyword(BaseModel):
+    name: str
+
+
 class Document(BaseModel):
     title: str
-    authors: list[str]
+    authors: list[Author]
+    keywords: list[Keyword]
+    fileName: str
+    docType: str = Field(alias='doc_type')
+    publicationDate: datetime
+
+
+class JournalArticle(Document):
     abstractText: str
-    keywords: list[str]
-    filename: str
+    journal: str
+    doi: str
+    cited: str
+    JEL: str
+
+
+class Book(Document):
+    publisher: str
+    isbn: str
 
 
 class Task(BaseModel):
@@ -42,11 +66,12 @@ class Task(BaseModel):
     status: TaskStatus
     document: Document
     created_at: datetime = Field(alias='createdAt')
-    finished_at: datetime = Field(alias='finishedAt', default=None)
-
+    finished_at: Optional[datetime] = Field(alias='finishedAt', default=None)
+    
     @classmethod
     def from_json(cls, json_str):
         data = json.loads(json_str)
+        logger.debug(f'Receiving JSON: {data}')
         if "status" in data and isinstance(data["status"], str):
             try:
                 data["status"] = TaskStatus(data["status"])
@@ -61,15 +86,23 @@ class Task(BaseModel):
 class TaskConsumer:
     """RabbitMQ任务消费者"""
 
-    def __init__(self, config: RabbitMQConfig, queue_name: str = "taskQueue", result_queue_name: str = "resultQueue"):
+    def __init__(self,
+                 config: RabbitMQConfig,
+                 queue_name: str = "taskQueue",
+                 result_queue_name: str = "resultQueue",
+                 ):
         self.config = config
         self.queue_name = queue_name
         self.result_queue_name = result_queue_name
         self.connection = None
         self.channel = None
 
-    def connect(self):
-        """连接到RabbitMQ服务器"""
+        self._connect()
+
+    def _connect(self):
+        if self.connection and not self.connection.is_closed:
+            return
+
         credentials = pika.PlainCredentials(
             self.config.user, self.config.password)
         parameters = pika.ConnectionParameters(
@@ -77,9 +110,10 @@ class TaskConsumer:
             port=self.config.port,
             credentials=credentials
         )
-
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
+        
+        # create or check (by default, taskQueue is created on published side)
         self.channel.queue_declare(queue=self.queue_name, durable=True)
         self.channel.queue_declare(queue=self.result_queue_name, durable=True)
         logger.info(
@@ -93,7 +127,10 @@ class TaskConsumer:
 
             # 在这里处理任务
             # TODO: 实现具体的任务处理逻辑
-
+            task.status = TaskStatus.PROCESSING
+            
+            preprocess(task)
+            
             # 处理成功，更新任务状态为done
             task.status = TaskStatus.DONE
             task.finished_at = datetime.now()
@@ -118,7 +155,7 @@ class TaskConsumer:
                 logger.error(f"发布失败结果时出错: {publish_error}")
 
             # 如果处理失败，根据业务需求决定是否重新入队
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
     def _publish_result(self, task: Task):
         """将处理结果发布到结果队列"""

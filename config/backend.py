@@ -25,5 +25,5 @@ class OSSConfig:
 class RabbitMQConfig:
     host: str = os.getenv('RABBITMQ_HOST', '127.0.0.1')
     port: int = int(os.getenv('RABBITMQ_PORT', '5672'))
-    user: str = os.getenv('RABBITMQ_USER', 'guest')
-    password: str = os.getenv('RABBITMQ_PASSWORD', 'guest')
+    user: str = os.getenv('RABBITMQ_USER', 'admin')
+    password: str = os.getenv('RABBITMQ_PASSWORD', 'admin')
