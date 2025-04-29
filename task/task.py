@@ -9,7 +9,7 @@ from loguru import logger
 import pika
 import json
 from config.backend import RabbitMQConfig
-from preprocess import preprocess
+from task.preprocess import preprocess
 
 
 class TaskStatus(str, Enum):
@@ -34,9 +34,20 @@ class Author(BaseModel):
     name: str
     institution: str
 
+    def to_dict(self):
+        return {
+            "name": self.name,
+            "institution": self.institution
+        }
+
 
 class Keyword(BaseModel):
     name: str
+
+    def to_dict(self):
+        return {
+            "name": self.name
+        }
 
 
 class Document(BaseModel):
@@ -46,6 +57,7 @@ class Document(BaseModel):
     fileName: str
     docType: str = Field(alias='doc_type')
     publicationDate: datetime
+    language: str
 
 
 class JournalArticle(Document):
@@ -81,6 +93,17 @@ class Task(BaseModel):
 
     def to_json(self):
         return self.model_dump_json()
+    
+    def to_metadata(self):
+        """将任务转换为元数据"""
+        metadata = {
+            "authors": [author.to_dict() for author in self.document.authors],
+            "keywords": [keyword.to_dict() for keyword in self.document.keywords],
+            "title": self.document.title,
+            "publicationDate": str(self.document.publicationDate.isoformat()),
+            "language": self.document.language
+        }
+        return metadata
 
 
 class TaskConsumer:

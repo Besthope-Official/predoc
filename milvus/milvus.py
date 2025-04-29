@@ -3,16 +3,14 @@
 """
 from pymilvus import MilvusClient, DataType
 from config.backend import MilvusConfig
+from loguru import logger
 import json
-import os
-from datetime import datetime
-import random
-from pydantic import BaseModel, Field
-from peewee import PostgresqlDatabase, Model, CharField
 
 _milvus_client = None
+_default_collection_name = MilvusConfig.default_collection_name
+_default_partition_name = MilvusConfig.default_partition_name
 
-def get_milvus_client() -> MilvusClient:
+def _get_milvus_client() -> MilvusClient:
     """
     获取 Milvus 客户端实例
     """
@@ -32,28 +30,7 @@ def get_milvus_client() -> MilvusClient:
         )
     return _milvus_client
 
-def has_collection(collection_name: str) -> bool:
-    """
-    检查集合是否存在
-    """
-    client = get_milvus_client()
-    return client.has_collection(collection_name)
-
-def has_partition(
-    collection_name: str,
-    partition_name: str
-) -> bool:
-    """
-    检查分区是否存在
-    """
-    client = get_milvus_client()
-    
-    if not client.has_collection(collection_name):
-        raise ValueError(f"集合 {collection_name} 不存在")
-    
-    return client.has_partition(collection_name, partition_name)
-
-def build_schema() -> None:
+def _build_schema() -> None:
     """
     创建集合的schema
     """
@@ -81,11 +58,11 @@ def build_schema() -> None:
     )
     return schema
 
-def build_index() -> None:
+def _build_index() -> None:
     """
     创建索引
     """
-    client = get_milvus_client()
+    client = _get_milvus_client()
     index_params = client.prepare_index_params()
     
     index_params.add_index(
@@ -98,17 +75,18 @@ def build_index() -> None:
 
     return index_params
 
-def create_collection(collection_name: str) -> None:
+def _create_collection(
+        collection_name: str = _default_collection_name) -> None:
     """
     创建集合
     """
-    client = get_milvus_client()
+    client = _get_milvus_client()
     
     if client.has_collection(collection_name):
         raise ValueError(f"集合 {collection_name} 已存在")
     
-    schema = build_schema()
-    index_params = build_index()
+    schema = _build_schema()
+    index_params = _build_index()
     
     client.create_collection(
         collection_name=collection_name,
@@ -116,14 +94,14 @@ def create_collection(collection_name: str) -> None:
         index_params=index_params
     )
 
-def create_partition(
-    collection_name: str,
-    partition_name: str
+def _create_partition(
+    collection_name: str = _default_collection_name,
+    partition_name: str = _default_partition_name
 ) -> None:
     """
     创建分区
     """
-    client = get_milvus_client()
+    client = _get_milvus_client()
     
     if not client.has_collection(collection_name):
         raise ValueError(f"集合 {collection_name} 不存在")
@@ -136,18 +114,18 @@ def create_partition(
         partition_name=partition_name
     )
 
-def store_embedding(
-    collection_name: str,
+def _store_embedding(
     embedding: list,
     chunk_text: list,
     metadata: list,
-    partition_name: str = "Default partition"
+    collection_name: str = _default_collection_name,
+    partition_name: str = _default_partition_name
 ) -> None:
     try:
-        client = get_milvus_client()
+        client = _get_milvus_client()
         
         if not client.has_collection(collection_name):
-            create_collection(collection_name)
+            _create_collection(collection_name)
 
         if not client.has_partition(collection_name, partition_name):
             client.create_partition(
@@ -161,7 +139,7 @@ def store_embedding(
             tmp = {
                 "embedding": embedding[i],
                 "chunk": chunk_text[i],
-                "metadata": metadata[i]
+                "metadata": json.dumps(metadata[i])
             }
             data.append(tmp)
 
@@ -172,18 +150,37 @@ def store_embedding(
             data=data
         )
     except Exception as e:
+        raise RuntimeError(f"插入数据失败 of store_embedding: {e}")
+
+def store_embedding_task(
+        embedding: list,
+        chunk_text: list,
+        task: "Task") -> None:
+    try:
+        metadata_json = task.to_metadata()
+        if metadata_json is None:
+            raise ValueError("文档数据不能为空")
+        _store_embedding(
+            embedding,
+            chunk_text,
+            [metadata_json] * len(embedding),
+            MilvusConfig.default_collection_name,
+            MilvusConfig.default_partition_name
+        )
+        
+    except Exception as e:
         raise RuntimeError(f"插入数据失败: {e}")
 
 def search_embedding(
-    collection_name: str,
     query_embedding: list,
     top_k: int = 3,
-    partition_name: str = "Default partition",
+    collection_name: str = _default_collection_name,
+    partition_name: str = _default_partition_name,
 ) -> list:
     """
     查询集合中的向量数据
     """
-    client = get_milvus_client()
+    client = _get_milvus_client()
     
     if not client.has_collection(collection_name):
         raise ValueError(f"集合 {collection_name} 不存在")
@@ -205,36 +202,3 @@ def search_embedding(
     )
     
     return results
-
-def drop_collection(collection_name: str) -> None:
-    """
-    删除集合
-    """
-    client = get_milvus_client()
-    
-    if not client.has_collection(collection_name):
-        raise ValueError(f"集合 {collection_name} 不存在")
-    
-    client.drop_collection(collection_name)
-
-def load_collection(collection_name: str) -> None:
-    """
-    加载集合
-    """
-    client = get_milvus_client()
-    
-    if not client.has_collection(collection_name):
-        raise ValueError(f"集合 {collection_name} 不存在")
-    
-    client.load_collection(collection_name)
-
-def release_collection(collection_name: str) -> None:
-    """
-    卸载集合
-    """
-    client = get_milvus_client()
-    
-    if not client.has_collection(collection_name):
-        raise ValueError(f"集合 {collection_name} 不存在")
-    
-    client.release_collection(collection_name)

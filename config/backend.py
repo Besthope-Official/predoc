@@ -10,7 +10,8 @@ class MilvusConfig:
     user: str = os.getenv('MILVUS_USER', 'root')
     password: str = os.getenv('MILVUS_PASSWORD', 'Milvus')
     db_name: str = os.getenv('MILVUS_DB', 'default')
-    collection_name: str = os.getenv('MILVUS_COLLECTION', 'documents')
+    default_collection_name: str = os.getenv('MILVUS_DEFAULT_COLLECTION', 'default_collection')
+    default_partition_name: str = os.getenv('MILVUS_DEFAULT_PARTITION', 'default_partition')
 
 
 @dataclass
