@@ -1,7 +1,8 @@
 import uvicorn
 import argparse
-from loguru import logger 
-
+from loguru import logger
+import os
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 
 def main():

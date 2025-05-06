@@ -1,4 +1,3 @@
-from task.task import Task
 from config.backend import OSSConfig
 from task.oss import download_file, upload_file
 from prep.parser import Parser
@@ -7,6 +6,10 @@ import os
 from pathlib import Path
 import shutil
 from datetime import datetime
+from milvus.milvus import store_embedding_task
+from random import random
+from models import Task
+
 
 def preprocess(task: Task):
     """
@@ -74,3 +77,10 @@ def preprocess(task: Task):
             shutil.rmtree(temp_dir)
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
         raise  # 重新抛出异常，以便上层调用者可以处理
+        
+    store_embedding_task(
+        [[random() for _ in range(768)] for _ in range(10)],
+        ["chunk test" for _ in range(10)],
+        task
+    )
+    

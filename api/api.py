@@ -6,7 +6,7 @@ import shutil
 from fastapi import FastAPI, File, UploadFile, Form, Body
 from loguru import logger
 
-from .strategy import PDFProcessor
+from prep.processor import PDFProcessor
 from .utils import api_success, api_fail, ApiResponse
 
 
