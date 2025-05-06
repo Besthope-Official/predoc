@@ -17,7 +17,7 @@ class TaskConsumer:
     def __init__(self,
                  config: RabbitMQConfig,
                  queue_name: str = "taskQueue",
-                 result_queue_name: str = "resultQueue",
+                 result_queue_name: str = "respQueue",
                  ):
         self.config = config
         self.queue_name = queue_name
@@ -52,38 +52,32 @@ class TaskConsumer:
         try:
             task = Task.from_json(body.decode('utf-8'))
             logger.info(f"收到任务: {task.task_id}")
-
-            # 在这里处理任务
-            # TODO: 实现具体的任务处理逻辑
-            task.status = TaskStatus.PROCESSING
+            self._publish_status(task, TaskStatus.PROCESSING, datetime.now())
 
             preprocess(task)
 
-            # 处理成功，更新任务状态为done
-            task.status = TaskStatus.DONE
-            task.finished_at = datetime.now()
-
-            self._publish_status(task)
-
+            self._publish_status(task, TaskStatus.DONE, datetime.now())
             ch.basic_ack(delivery_tag=method.delivery_tag)
             logger.info(f"任务 {task.task_id} 处理完成")
         except Exception as e:
             logger.error(f"处理任务时出错: {e}")
-
             try:
-                task.status = TaskStatus.FAILED
-                task.finished_at = datetime.now()
-
-                self._publish_status(task)
+                self._publish_status(task, TaskStatus.FAILED, datetime.now())
             except Exception as publish_error:
                 logger.error(f"发布失败结果时出错: {publish_error}")
 
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
-    def _publish_status(self, task: Task):
+    def _publish_status(self, task: Task, status: TaskStatus, dateTime: datetime):
         """更新 task 状态, 发布到结果队列"""
         if not self.connection or self.connection.is_closed:
             self._connect()
+
+        task.status = status
+        if status == TaskStatus.PROCESSING:
+            task.processed_at = dateTime
+        elif status == TaskStatus.DONE or status == TaskStatus.FAILED:
+            task.finished_at = dateTime
 
         self.channel.basic_publish(
             exchange='',

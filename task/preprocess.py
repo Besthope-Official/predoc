@@ -8,6 +8,8 @@ def preprocess(task: Task):
     预处理后得到的图表会上传到 OSS 上
     分块后嵌入的文本直接存储到 Milvus 中
     """
+    import time
+    time.sleep(20)
     store_embedding_task(
         [[random() for _ in range(768)] for _ in range(10)],
         ["chunk test" for _ in range(10)],

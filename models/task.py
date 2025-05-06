@@ -51,7 +51,16 @@ class Task(BaseModel):
         return self.model_dump_json()
 
     def to_resp_json(self):
-        return self.to_json()
+        data = {
+            "taskId": str(self.task_id),
+            "status": str(self.status),
+            "dateTime": None
+        }
+        if self.status == TaskStatus.PROCESSING:
+            data['dateTime'] = self.processed_at.isoformat() if self.processed_at else None
+        elif self.status == TaskStatus.DONE or self.status == TaskStatus.FAILED:
+            data['dateTime'] = self.finished_at.isoformat() if self.finished_at else None
+        return json.dumps(data)
 
     def to_metadata(self):
         """将任务转换为元数据"""

@@ -4,9 +4,9 @@ import numpy as np
 from loguru import logger
 
 from config.model import ModelConfig
-from prep.model import generate_embeddings, init_model
-from prep.chunker import Chunker
-from prep.parser import Parser
+from .model import generate_embeddings, init_model
+from .chunker import Chunker
+from .parser import Parser
 
 from .error import ParseResultEmptyException
 
