@@ -1,4 +1,4 @@
-
+from task.task import Task
 from config.backend import OSSConfig
 from task.oss import download_file, upload_file
 from prep.parser import Parser
@@ -18,9 +18,6 @@ def preprocess(task: Task):
         temp_base_dir = Path(os.environ.get('TEMP', '/tmp'))
         temp_dir = temp_base_dir / f"task_{task.task_id}"  # 使用任务ID作为目录名
         temp_dir.mkdir(parents=True, exist_ok=True)
-
-
-        
 
         # 在临时目录下创建一个文件用于存储下载的PDF
         file_name_without_extension = Path(task.document.fileName).stem
@@ -46,19 +43,21 @@ def preprocess(task: Task):
         # 将解析后的图表等文件上传到 OSS
         uploaded_files = []
         for file_type in ["figures", "formulas", "tables"]:
-            type_dir = parser.save_path /file_name_without_extension/file_type
+            type_dir = parser.save_path / file_name_without_extension / file_type
             logger.info(f"检查目录 {type_dir} 是否存在以及是否有文件")
-            if type_dir.exists() and type_dir.iterdir():
+            if type_dir.exists():
                 for file in type_dir.iterdir():
                     if file.is_file():
-                        logger.info(f"尝试上传文件 {file} 到 MinIO")
+                        # 生成唯一的文件路径，包含文件名前缀和文件类型
+                        unique_file_name = f"{file_name_without_extension}/{file_type}/{file.name}"
+                        logger.info(f"尝试上传文件 {file} 到 MinIO，路径为 {unique_file_name}")
                         upload_result = upload_file(
                             file_path=file,
-                            object_name=str(file.relative_to(parser.save_path)),
+                            object_name=unique_file_name,
                             bucket_name=OSSConfig().minio_bucket
                         )
                         logger.info(f"文件 {file} 上传到 OSS 结果: {upload_result}")
-                        uploaded_files.append(file)
+                        uploaded_files.append(unique_file_name)
         if not uploaded_files:
             logger.info("没有找到要上传的文件")
         else:
@@ -68,10 +67,7 @@ def preprocess(task: Task):
         shutil.rmtree(temp_dir)
         logger.info(f"临时目录 {temp_dir} 已清理")
 
-        # 更新任务状态为成功
-        task.status = TaskStatus.DONE
-        task.finished_at = datetime.now()
-        logger.info(f"任务 {task.task_id} 预处理完成")
+
 
     except Exception as e:
         logger.error(f"预处理任务 {task.task_id} 出错: {e}")
