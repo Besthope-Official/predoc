@@ -12,6 +12,9 @@ from doclayout_yolo import YOLOv10
 import cv2
 from pathlib import Path
 
+from config.backend import OSSConfig
+from task.oss import upload_file
+
 class Parser:
     def __init__(self):
         self.model = self._load_yolo_model()
@@ -47,8 +50,17 @@ class Parser:
         for d in dirs.values():
             d.mkdir(parents=True, exist_ok=True)
         return dirs["text"], dirs["formulas"], dirs["figures"], dirs["tables"], dirs["temp"]
-
-    def process_pdf(self, pdf_path: str, output_dir: str) -> str:
+    
+    @staticmethod
+    def _upload_to_oss(save_path: str, object_name: str):
+        upload_result = upload_file(
+            file_path=Path(save_path),
+            object_name=object_name,
+            bucket_name=OSSConfig.minio_bucket
+        )
+        logger.debug(f"upload to {upload_result}")
+    
+    def process_pdf(self, pdf_path: str, output_dir: str, upload_to_oss = False) -> str:
         paper_title = os.path.splitext(os.path.basename(pdf_path))[0]
         paper_output_dir = Path(output_dir) / paper_title
         text_dir, formulas_dir, figures_dir, tables_dir, temp_dir = self.ensure_output_dirs(paper_output_dir)
@@ -104,6 +116,10 @@ class Parser:
                     })
                     counters[element_type] += 1
                     text_blocks.append(marker)
+                    if upload_to_oss:
+                        self._upload_to_oss(
+                            save_path=save_path,
+                            object_name=f"{paper_title}/{element_type}/{Path(save_path).name}")
                 else:
                     text = self._process_text_block(crop_img)
                     if re.fullmatch(

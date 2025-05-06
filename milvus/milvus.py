@@ -3,6 +3,7 @@
 """
 from pymilvus import MilvusClient, DataType
 from config.backend import MilvusConfig
+from models import Task
 from loguru import logger
 import json
 
@@ -155,7 +156,7 @@ def _store_embedding(
 def store_embedding_task(
         embedding: list,
         chunk_text: list,
-        task: "Task") -> None:
+        task: Task) -> None:
     try:
         metadata_json = task.to_metadata()
         if metadata_json is None:

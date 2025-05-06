@@ -29,7 +29,7 @@ class TaskConsumer:
     def _connect(self):
         if self.connection and not self.connection.is_closed:
             return
-
+        logger.info(f"Connecting to RabbitMQ Server: {self.config.host}...")
         credentials = pika.PlainCredentials(
             self.config.user, self.config.password)
         parameters = pika.ConnectionParameters(

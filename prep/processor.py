@@ -1,5 +1,5 @@
 from abc import abstractmethod
-
+from typing import Tuple
 import numpy as np
 from loguru import logger
 
@@ -18,8 +18,10 @@ class Processor:
     """数据预处理接口，需实现 parse 和 chunk 方法"""
     BASE_EMBD_MODEL = ModelConfig.EMBEDDING_MODEL
 
-    def __init__(self, parse_method="auto", chunk_strategy="semantic_ollama"):
-        self.output_dir = ModelConfig.CHUNK_OUTPUT_DIR
+    def __init__(self, output_dir = ModelConfig.CHUNK_OUTPUT_DIR,
+                 parse_method="auto",
+                 chunk_strategy="semantic_ollama"):
+        self.output_dir = output_dir
         self.parse_method = parse_method.lower()
         self.chunk_strategy = chunk_strategy.lower()
         logger.info(f'解析方法: {self.parse_method} 分块策略为: {self.chunk_strategy}')
@@ -52,7 +54,7 @@ class Processor:
         return [{"chunk": chunk, "embedding": embedding.tolist()}
                 for chunk, embedding in zip(chunks, embeddings)]
 
-    def preprocess(self, file_path: str) -> list:
+    def preprocess(self, file_path: str, warpper = True):
         """预处理文档"""
         try:
             text = self.parse(file_path)
@@ -67,7 +69,10 @@ class Processor:
         try:
             embd_model_info = init_model()
             embeddings = generate_embeddings(embd_model_info, chunks)
-            return self._wrapper(chunks, embeddings)
+            if warpper:
+                return self._wrapper(chunks, embeddings)
+            else:
+                return (chunks, embeddings.tolist())
         except Exception as e:
             raise Exception(f"嵌入文本失败: {e}")
 
@@ -75,13 +80,13 @@ class Processor:
 class PDFProcessor(Processor):
     """PDF文档处理类"""
 
-    def __init__(self, parse_method="auto", chunk_strategy="semantic_ollama"):
-        super().__init__(parse_method, chunk_strategy)
+    def __init__(self, output_dir=ModelConfig.CHUNK_OUTPUT_DIR, parse_method="auto", chunk_strategy="semantic_ollama"):
+        super().__init__(output_dir, parse_method, chunk_strategy)
 
     def parse(self, file_path: str) -> str:
         """解析PDF文档，根据解析方法提取文本"""
         if self.parse_method == "auto" or self.parse_method == "yolo":
-            text = parser.process_pdf(file_path, self.output_dir)
+            text = parser.process_pdf(file_path, self.output_dir, upload_to_oss=True)
 
         if not text.strip():
             raise ParseResultEmptyException("提取文本为空")
@@ -91,5 +96,5 @@ class PDFProcessor(Processor):
         """将文本分成语义块"""
         if not text.strip():
             return []
-        doc_list = chunker.split_text(text)
+        doc_list = chunker.split_text(text, self.chunk_strategy)
         return [doc.page_content for doc in doc_list]   
