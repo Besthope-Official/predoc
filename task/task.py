@@ -1,7 +1,6 @@
 '''消费文档预处理的任务'''
 from datetime import datetime
 from loguru import logger
-
 import pika
 from config.backend import RabbitMQConfig
 from task.preprocess import preprocess

@@ -1,5 +1,3 @@
-'''文档解析器'''
-
 import os
 import re
 import json
@@ -12,7 +10,7 @@ import pytesseract
 from huggingface_hub import hf_hub_download
 from doclayout_yolo import YOLOv10
 import cv2
-
+from pathlib import Path
 
 class Parser:
     def __init__(self):
@@ -38,23 +36,22 @@ class Parser:
             raise FileNotFoundError(f"文件 {file_path} 不存在或无权限")
 
     @staticmethod
-    def ensure_output_dirs(paper_output_dir: str) -> Tuple[str, str, str, str, str]:
+    def ensure_output_dirs(paper_output_dir: Path) -> Tuple[Path, Path, Path, Path, Path]:
         dirs = {
-            "text": os.path.join(paper_output_dir, "text_contents"),
-            "formulas": os.path.join(paper_output_dir, "formulas"),
-            "figures": os.path.join(paper_output_dir, "figures"),
-            "tables": os.path.join(paper_output_dir, "tables"),
-            "temp": os.path.join(paper_output_dir, "temp")
+            "text": paper_output_dir / "text_contents",
+            "formulas": paper_output_dir / "formulas",
+            "figures": paper_output_dir / "figures",
+            "tables": paper_output_dir / "tables",
+            "temp": paper_output_dir / "temp"
         }
         for d in dirs.values():
-            os.makedirs(d, exist_ok=True)
+            d.mkdir(parents=True, exist_ok=True)
         return dirs["text"], dirs["formulas"], dirs["figures"], dirs["tables"], dirs["temp"]
 
     def process_pdf(self, pdf_path: str, output_dir: str) -> str:
         paper_title = os.path.splitext(os.path.basename(pdf_path))[0]
-        paper_output_dir = os.path.join(output_dir, paper_title)
-        text_dir, formulas_dir, figures_dir, tables_dir, temp_dir = self.ensure_output_dirs(
-            paper_output_dir)
+        paper_output_dir = Path(output_dir) / paper_title
+        text_dir, formulas_dir, figures_dir, tables_dir, temp_dir = self.ensure_output_dirs(paper_output_dir)
 
         doc = fitz.open(pdf_path)
         all_text = []
@@ -73,12 +70,12 @@ class Parser:
             pix = page.get_pixmap(matrix=mat, alpha=False)
 
             img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            temp_img_path = os.path.join(temp_dir, f"temp_page_{page_num}.png")
+            temp_img_path = temp_dir / f"temp_page_{page_num}.png"
             img.save(temp_img_path, "PNG", compress_level=0)
 
             cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
             det_res = self.model.predict(
-                temp_img_path, imgsz=1024, conf=0.25, device="cuda:0")
+                str(temp_img_path), imgsz=1024, conf=0.25, device="cuda:0")
             results = det_res[0]
 
             text_blocks = []
@@ -129,7 +126,7 @@ class Parser:
 
             os.remove(temp_img_path)
 
-        index_path = os.path.join(paper_output_dir, "content_index.json")
+        index_path = paper_output_dir / "content_index.json"
         with open(index_path, "w", encoding="utf-8") as f:
             json.dump(content_index, f, ensure_ascii=False, indent=2)
 
@@ -148,11 +145,12 @@ class Parser:
             return "text"
         return None
 
-    def _save_non_text_element(self, element_type: str, counters: Dict, crop_img: np.ndarray, save_dir: str) -> Tuple[str, str]:
+    def _save_non_text_element(self, element_type: str, counters: Dict, crop_img: np.ndarray, save_dir: Path) -> Tuple[str, str]:
         filename = f"{element_type}_{counters[element_type]}.png"
-        save_path = os.path.join(save_dir, filename)
-        cv2.imwrite(save_path, crop_img)
-        return save_path, f"[/{element_type}][{counters[element_type]}][/{element_type}]"
+        save_path = save_dir / filename
+        cv2.imwrite(str(save_path), crop_img)
+        logger.info(f"保存 {element_type} 到 {save_path}")
+        return str(save_path), f"[/{element_type}][{counters[element_type]}][/{element_type}]"
 
     def _process_text_block(self, crop_img: np.ndarray) -> str:
         gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)

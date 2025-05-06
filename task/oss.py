@@ -6,7 +6,7 @@ from typing import Optional, Union, IO
 from pathlib import Path
 from minio import Minio
 from minio.error import S3Error
-
+from loguru import logger
 from config.backend import OSSConfig
 
 _minio_client = None
@@ -37,9 +37,9 @@ def get_minio_client() -> Minio:
 
 
 def upload_file(
-    file_path: Union[str, Path],
-    object_name: Optional[str] = None,
-    bucket_name: Optional[str] = None
+    file_path: Path,
+    object_name: str,
+    bucket_name: str
 ) -> str:
     """
     上传文件到 OSS
@@ -56,36 +56,39 @@ def upload_file(
         FileNotFoundError: 本地文件不存在
         S3Error: OSS操作错误
     """
-    file_path = Path(file_path)
-
-    if not file_path.exists():
-        raise FileNotFoundError(f"文件不存在: {file_path}")
-
-    if object_name is None:
-        object_name = file_path.name
-
-    if bucket_name is None:
-        bucket_name = OSSConfig().minio_bucket
-
     client = get_minio_client()
 
-    if not client.bucket_exists(bucket_name):
-        client.make_bucket(bucket_name)
+    if not file_path.exists():
+        logger.error(f"文件不存在: {file_path}")
+        raise FileNotFoundError(f"文件不存在: {file_path}")
 
-    client.fput_object(
-        bucket_name,
-        object_name,
-        str(file_path),
-        content_type='application/octet-stream'
-    )
+    try:
+        if not client.bucket_exists(bucket_name):
+            client.make_bucket(bucket_name)
+            logger.info(f"创建存储桶 {bucket_name}")
 
-    return object_name
+        client.fput_object(
+            bucket_name,
+            object_name,
+            str(file_path),
+            content_type='application/octet-stream'
+        )
+        logger.info(f"文件 {file_path} 成功上传到 OSS 作为对象 {object_name}")
+        return object_name
+    except S3Error as e:
+        logger.error(f"上传文件 {file_path} 到存储桶 {bucket_name} 失败: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"上传文件时发生未知错误: {e}")
+        raise
+
 
 
 def download_file(
     object_name: str,
     file_path: Union[str, Path],
-    bucket_name: Optional[str] = None
+    bucket_name: Optional[str] = None,
+    pdf_bucket: bool = False  
 ) -> Path:
     """
     从 OSS 下载文件
@@ -106,7 +109,11 @@ def download_file(
     os.makedirs(file_path.parent, exist_ok=True)
 
     if bucket_name is None:
-        bucket_name = OSSConfig().minio_bucket
+        if pdf_bucket:
+            bucket_name = OSSConfig.pdf_bucket  # 使用 Java 端的存储桶
+        else:
+            bucket_name = OSSConfig.minio_bucket  # 使用默认的 Python 端存储桶
+        
 
     client = get_minio_client()
 

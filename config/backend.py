@@ -19,7 +19,8 @@ class OSSConfig:
     minio_endpoint = os.getenv('MINIO_ENDPOINT', '127.0.0.1:9000')
     minio_access = os.getenv('MINIO_ACCESS', 'minioadmin')
     minio_secret = os.getenv('MINIO_SECRET', 'minioadmin')
-    minio_bucket = os.getenv('MINIO_BUCKET', 'prep')
+    minio_bucket = os.getenv('MINIO_BUCKET', 'prep') # Python 端的存储桶
+    pdf_bucket = "mybucket"  # Java 端的存储桶
 
 
 @dataclass
