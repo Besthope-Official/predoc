@@ -1,113 +1,18 @@
 '''消费文档预处理的任务'''
-from pydantic import BaseModel, Field
-from typing import Optional
-from enum import Enum
-from uuid import UUID
 from datetime import datetime
 from loguru import logger
 
 import pika
-import json
 from config.backend import RabbitMQConfig
 from task.preprocess import preprocess
-
-
-class TaskStatus(str, Enum):
-    """任务状态枚举"""
-    PENDING = "PENDING"
-    PROCESSING = "PROCESSING"
-    DONE = "DONE"
-    FAILED = "FAILED"
-
-    def __str__(self):
-        return self.value
-
-    @classmethod
-    def from_string(cls, status_str):
-        try:
-            return cls(status_str.upper())
-        except ValueError:
-            return cls.PENDING
-
-
-class Author(BaseModel):
-    name: str
-    institution: str
-
-    def to_dict(self):
-        return {
-            "name": self.name,
-            "institution": self.institution
-        }
-
-
-class Keyword(BaseModel):
-    name: str
-
-    def to_dict(self):
-        return {
-            "name": self.name
-        }
-
-
-class Document(BaseModel):
-    title: str
-    authors: list[Author]
-    keywords: list[Keyword]
-    fileName: str
-    docType: str = Field(alias='doc_type')
-    publicationDate: datetime
-    language: str
-
-
-class JournalArticle(Document):
-    abstractText: str
-    journal: str
-    doi: str
-    cited: str
-    JEL: str
-
-
-class Book(Document):
-    publisher: str
-    isbn: str
-
-
-class Task(BaseModel):
-    task_id: UUID = Field(alias='taskId')
-    status: TaskStatus
-    document: Document
-    created_at: datetime = Field(alias='createdAt')
-    finished_at: Optional[datetime] = Field(alias='finishedAt', default=None)
-    
-    @classmethod
-    def from_json(cls, json_str):
-        data = json.loads(json_str)
-        logger.debug(f'Receiving JSON: {data}')
-        if "status" in data and isinstance(data["status"], str):
-            try:
-                data["status"] = TaskStatus(data["status"])
-            except ValueError:
-                data["status"] = TaskStatus.PENDING
-        return cls.model_validate(data)
-
-    def to_json(self):
-        return self.model_dump_json()
-    
-    def to_metadata(self):
-        """将任务转换为元数据"""
-        metadata = {
-            "authors": [author.to_dict() for author in self.document.authors],
-            "keywords": [keyword.to_dict() for keyword in self.document.keywords],
-            "title": self.document.title,
-            "publicationDate": str(self.document.publicationDate.isoformat()),
-            "language": self.document.language
-        }
-        return metadata
+from models import TaskStatus, Task
 
 
 class TaskConsumer:
-    """RabbitMQ任务消费者"""
+    '''
+        Consumer class for RabbitMQ document-preprocess tasks.
+        Also producer of task result to provide task status for TaskProducer to persist (save to e.g. postgresql).
+    '''
 
     def __init__(self,
                  config: RabbitMQConfig,
@@ -135,7 +40,7 @@ class TaskConsumer:
         )
         self.connection = pika.BlockingConnection(parameters)
         self.channel = self.connection.channel()
-        
+
         # create or check (by default, taskQueue is created on published side)
         self.channel.queue_declare(queue=self.queue_name, durable=True)
         self.channel.queue_declare(queue=self.result_queue_name, durable=True)
@@ -151,46 +56,41 @@ class TaskConsumer:
             # 在这里处理任务
             # TODO: 实现具体的任务处理逻辑
             task.status = TaskStatus.PROCESSING
-            
+
             preprocess(task)
-            
+
             # 处理成功，更新任务状态为done
             task.status = TaskStatus.DONE
             task.finished_at = datetime.now()
 
-            # 将结果发送到结果队列
-            self._publish_result(task)
+            self._publish_status(task)
 
-            # 确认消息已处理
             ch.basic_ack(delivery_tag=method.delivery_tag)
             logger.info(f"任务 {task.task_id} 处理完成")
         except Exception as e:
             logger.error(f"处理任务时出错: {e}")
 
             try:
-                # 更新任务状态为fail
                 task.status = TaskStatus.FAILED
                 task.finished_at = datetime.now()
 
-                # 将失败结果发送到结果队列
-                self._publish_result(task)
+                self._publish_status(task)
             except Exception as publish_error:
                 logger.error(f"发布失败结果时出错: {publish_error}")
 
-            # 如果处理失败，根据业务需求决定是否重新入队
             ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
 
-    def _publish_result(self, task: Task):
-        """将处理结果发布到结果队列"""
+    def _publish_status(self, task: Task):
+        """更新 task 状态, 发布到结果队列"""
         if not self.connection or self.connection.is_closed:
-            self.connect()
+            self._connect()
 
         self.channel.basic_publish(
             exchange='',
             routing_key=self.result_queue_name,
-            body=task.to_json(),
+            body=task.to_resp_json(),
             properties=pika.BasicProperties(
-                delivery_mode=2,  # 持久化消息
+                delivery_mode=2,
             )
         )
         logger.info(
@@ -199,7 +99,7 @@ class TaskConsumer:
     def start_consuming(self):
         """开始消费消息"""
         if not self.connection or self.connection.is_closed:
-            self.connect()
+            self._connect()
 
         self.channel.basic_qos(prefetch_count=1)
         self.channel.basic_consume(

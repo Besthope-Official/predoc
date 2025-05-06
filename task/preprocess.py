@@ -1,9 +1,8 @@
 from milvus.milvus import store_embedding_task
 from random import random
+from models import Task
 
-# task : Task 在模块加载时会立即求值 因此会造成循环引入
-# task : "Task" 是一个字符串类型的注解 在模块加载时不会求值 只有被调用时才会求值
-def preprocess(task: "Task"):
+def preprocess(task: Task):
     """
     进行预处理任务，从 OSS 上获取文件，并进行预处理
     预处理后得到的图表会上传到 OSS 上
