@@ -1,4 +1,3 @@
-'''消费文档预处理的任务'''
 from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
@@ -9,8 +8,6 @@ from loguru import logger
 import pika
 import json
 from config.backend import RabbitMQConfig
-from preprocess import preprocess
-
 
 class TaskStatus(str, Enum):
     """任务状态枚举"""
@@ -29,15 +26,12 @@ class TaskStatus(str, Enum):
         except ValueError:
             return cls.PENDING
 
-
 class Author(BaseModel):
     name: str
     institution: str
 
-
 class Keyword(BaseModel):
     name: str
-
 
 class Document(BaseModel):
     title: str
@@ -47,7 +41,6 @@ class Document(BaseModel):
     docType: str = Field(alias='doc_type')
     publicationDate: datetime
 
-
 class JournalArticle(Document):
     abstractText: str
     journal: str
@@ -55,11 +48,9 @@ class JournalArticle(Document):
     cited: str
     JEL: str
 
-
 class Book(Document):
     publisher: str
     isbn: str
-
 
 class Task(BaseModel):
     task_id: UUID = Field(alias='taskId')
@@ -71,7 +62,6 @@ class Task(BaseModel):
     @classmethod
     def from_json(cls, json_str):
         data = json.loads(json_str)
-        logger.debug(f'Receiving JSON: {data}')
         if "status" in data and isinstance(data["status"], str):
             try:
                 data["status"] = TaskStatus(data["status"])
@@ -82,6 +72,9 @@ class Task(BaseModel):
     def to_json(self):
         return self.model_dump_json()
 
+def preprocess(task):
+    from task.preprocess import preprocess as preprocess_func
+    preprocess_func(task)
 
 class TaskConsumer:
     """RabbitMQ任务消费者"""
@@ -126,9 +119,9 @@ class TaskConsumer:
             logger.info(f"收到任务: {task.task_id}")
 
             # 在这里处理任务
-            # TODO: 实现具体的任务处理逻辑
             task.status = TaskStatus.PROCESSING
             
+            # 调用 preprocess 函数处理任务
             preprocess(task)
             
             # 处理成功，更新任务状态为done

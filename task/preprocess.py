@@ -1,6 +1,7 @@
-from task.task import Task
-from oss import download_file, upload_file
-from parser import Parser
+
+from config.backend import OSSConfig
+from task.oss import download_file, upload_file
+from prep.parser import Parser
 from loguru import logger
 import os
 from pathlib import Path
@@ -13,11 +14,16 @@ def preprocess(task: Task):
     预处理后得到的图表等文件会上传到 OSS 上
     """
     try:
-        # 创建一个临时目录用于存储下载的文件和解析结果，TEMP为系统环境变量
-        temp_dir = Path(os.environ.get('TEMP', '/tmp')) / f"task_{task.task_id}"
+        # 创建一个临时目录用于存储下载的文件和解析结果
+        temp_base_dir = Path(os.environ.get('TEMP', '/tmp'))
+        temp_dir = temp_base_dir / f"task_{task.task_id}"  # 使用任务ID作为目录名
         temp_dir.mkdir(parents=True, exist_ok=True)
 
-        # 从 OSS 下载文件到本地临时目录
+
+        
+
+        # 在临时目录下创建一个文件用于存储下载的PDF
+        file_name_without_extension = Path(task.document.fileName).stem
         local_file_path = temp_dir / task.document.fileName
         download_file(
             object_name=task.document.fileName,
@@ -28,27 +34,35 @@ def preprocess(task: Task):
 
         # 初始化解析器
         parser = Parser()
+        parser.save_path = temp_dir  # 将解析结果保存到临时目录
 
         # 解析文件
         parser.process_pdf(
             pdf_path=str(local_file_path),
-            output_dir=str(temp_dir)
+            output_dir=str(parser.save_path)  
         )
-        logger.info(f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {temp_dir}")
+        logger.info(f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {parser.save_path}")
 
         # 将解析后的图表等文件上传到 OSS
+        uploaded_files = []
         for file_type in ["figures", "formulas", "tables"]:
-            type_dir = temp_dir / file_type
-            if type_dir.exists():
+            type_dir = parser.save_path /file_name_without_extension/file_type
+            logger.info(f"检查目录 {type_dir} 是否存在以及是否有文件")
+            if type_dir.exists() and type_dir.iterdir():
                 for file in type_dir.iterdir():
                     if file.is_file():
-                        # 上传到 OSS
-                        upload_file(
+                        logger.info(f"尝试上传文件 {file} 到 MinIO")
+                        upload_result = upload_file(
                             file_path=file,
-                            object_name=str(file.relative_to(temp_dir)),
+                            object_name=str(file.relative_to(parser.save_path)),
                             bucket_name=OSSConfig().minio_bucket
                         )
-                        logger.info(f"文件 {file} 已上传到 OSS")
+                        logger.info(f"文件 {file} 上传到 OSS 结果: {upload_result}")
+                        uploaded_files.append(file)
+        if not uploaded_files:
+            logger.info("没有找到要上传的文件")
+        else:
+            logger.info(f"上传到 MinIO 的文件列表: {uploaded_files}")
 
         # 清理临时文件
         shutil.rmtree(temp_dir)
@@ -67,6 +81,4 @@ def preprocess(task: Task):
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
-        raise
-
-    pass
+        raise  # 重新抛出异常，以便上层调用者可以处理
