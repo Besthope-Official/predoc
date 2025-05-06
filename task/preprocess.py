@@ -25,7 +25,7 @@ def preprocess(task: Task):
         download_file(
             object_name=task.document.fileName,
             file_path=local_file_path,
-            bucket_name=OSSConfig().minio_bucket
+            pdf_bucket=True  # 指定从 Java 端的存储桶下载
         )
         logger.info(f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}")
 
@@ -54,7 +54,7 @@ def preprocess(task: Task):
                         upload_result = upload_file(
                             file_path=file,
                             object_name=unique_file_name,
-                            bucket_name=OSSConfig().minio_bucket
+                            bucket_name=OSSConfig().minio_bucket # 使用 Python 端的存储桶
                         )
                         logger.info(f"文件 {file} 上传到 OSS 结果: {upload_result}")
                         uploaded_files.append(unique_file_name)

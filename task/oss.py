@@ -87,7 +87,8 @@ def upload_file(
 def download_file(
     object_name: str,
     file_path: Union[str, Path],
-    bucket_name: Optional[str] = None
+    bucket_name: Optional[str] = None,
+    pdf_bucket: bool = False  
 ) -> Path:
     """
     从 OSS 下载文件
@@ -108,7 +109,11 @@ def download_file(
     os.makedirs(file_path.parent, exist_ok=True)
 
     if bucket_name is None:
-        bucket_name = OSSConfig().minio_bucket
+        if pdf_bucket:
+            bucket_name = OSSConfig.pdf_bucket  # 使用 Java 端的存储桶
+        else:
+            bucket_name = OSSConfig.minio_bucket  # 使用默认的 Python 端存储桶
+        
 
     client = get_minio_client()
 
