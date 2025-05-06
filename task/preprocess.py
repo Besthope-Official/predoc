@@ -67,12 +67,8 @@ def preprocess(task: Task):
         shutil.rmtree(temp_dir)
         logger.info(f"临时目录 {temp_dir} 已清理")
 
-
-
     except Exception as e:
-        logger.error(f"预处理任务 {task.task_id} 出错: {e}")
-        task.status = TaskStatus.FAILED
-        task.finished_at = datetime.now()
+        logger.error(f"预处理任务 {task.task_id} 上传文件出错: {e}")
         # 确保在任务失败时也清理临时目录
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
