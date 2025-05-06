@@ -7,10 +7,11 @@ import os
 class MilvusConfig:
     host: str = os.getenv('MILVUS_HOST', '127.0.0.1')
     port: int = int(os.getenv('MILVUS_PORT', '19530'))
-    user: str = os.getenv('MILVUS_USER', '')
-    password: str = os.getenv('MILVUS_PASSWORD', '')
+    user: str = os.getenv('MILVUS_USER', 'root')
+    password: str = os.getenv('MILVUS_PASSWORD', 'Milvus')
     db_name: str = os.getenv('MILVUS_DB', 'default')
-    collection_name: str = os.getenv('MILVUS_COLLECTION', 'documents')
+    default_collection_name: str = os.getenv('MILVUS_DEFAULT_COLLECTION', 'default_collection')
+    default_partition_name: str = os.getenv('MILVUS_DEFAULT_PARTITION', 'default_partition')
 
 
 @dataclass
