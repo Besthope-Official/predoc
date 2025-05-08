@@ -199,7 +199,7 @@ def search_embedding(
         data=[query_embedding],
         limit=top_k,
         search_params=search_params,
-        output_fields=["chunk"]
+        output_fields=["chunk", "metadata"]
     )
     
     return results

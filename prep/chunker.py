@@ -138,6 +138,17 @@ class TwoStageSemanticChunker:
         if current_section:
             sections.append("".join(current_section))
         return sections
+    
+    @staticmethod
+    def _remove_thinking(text: str) -> str:
+        '''
+        对于推理系大模型, 输出如 `<think><Thinking Process></think>\n<Answer>`, 仅保留 `<Answer>` 部分
+        '''
+        cleaned_text = re.sub(r'(?i)<think>.*?</think>', '', text, flags=re.DOTALL)
+        cleaned_text = re.sub(r'\n\s*\n', '\n\n', cleaned_text)
+        cleaned_text = cleaned_text.lstrip()
+        
+        return cleaned_text
 
     def create_semantic_chunks(self, text: str) -> List[str]:
         if len(text) < 100:
@@ -163,18 +174,24 @@ class TwoStageSemanticChunker:
         分块结果:"""
 
         response = self._call_ollama(prompt, system_prompt)
-        result_chunks = [chunk.strip() for chunk in response.split(
+        cleaned_text = self._remove_thinking(response)
+        result_chunks = [chunk.strip() for chunk in cleaned_text.split(
             "[CHUNK_BREAK]") if chunk.strip()]
+        logger.debug(result_chunks)
+
         if len(result_chunks) <= 1:
             logger.warning("LLM只生成了一个块或返回空结果，使用备选分块方法")
             return self.create_semantic_chunks_simple(text)
 
+        # In case of LLM adds or removes some content unexpectedly
         reconstructed_text = "".join([chunk.strip()
                                      for chunk in result_chunks])
         original_text = text.strip()
         similarity_ratio = len(reconstructed_text) / \
             len(original_text) if original_text else 0
 
+        # ratio of 0.95-1.05 is considered acceptable
+        # NO RETRY, use second choice for convenience
         if similarity_ratio < 0.95 or similarity_ratio > 1.05:
             logger.warning(
                 f"分块内容与原文不匹配 (相似度比例: {similarity_ratio:.4f})，使用备选分块方法")

@@ -7,7 +7,7 @@ from config.backend import OSSConfig
 from prep.processor import PDFProcessor
 
 from task.oss import download_file, upload_file
-from milvus.milvus import store_embedding_task
+from task.milvus import store_embedding_task
 from models import Task
 
 

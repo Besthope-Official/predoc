@@ -11,7 +11,7 @@ from .parser import Parser
 from .error import ParseResultEmptyException
 
 parser = Parser()
-chunker = Chunker(model_name='qwen2.5-coder:7b')
+chunker = Chunker(model_name='qwen3:4b')
 
 
 class Processor:

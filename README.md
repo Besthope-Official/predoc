@@ -16,7 +16,7 @@ Ensure that you are in RAG env, then install `pytorch` and required dependencies
 
 ```bash
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
-pip install -r /docker/requirements.txt
+pip install -r requirements.txt
 ```
 
 You may need install `tesseract` for OCR capability, see [doc](https://github.com/UB-Mannheim/tesseract/wiki) for installation guide:

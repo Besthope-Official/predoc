@@ -1,6 +1,7 @@
 '''消费文档预处理的任务'''
 from datetime import datetime
 from loguru import logger
+import threading
 import pika
 from config.backend import RabbitMQConfig
 from task.preprocess import preprocess
@@ -53,19 +54,43 @@ class TaskConsumer:
             logger.info(f"收到任务: {task.task_id}")
             self._publish_status(task, TaskStatus.PROCESSING, datetime.now())
 
-            preprocess(task)
-
-            self._publish_status(task, TaskStatus.DONE, datetime.now())
-            ch.basic_ack(delivery_tag=method.delivery_tag)
-            logger.info(f"任务 {task.task_id} 处理完成")
+            # In case of preprocess task blocking main thread KEEPING HEARTBEAT
+            thread = threading.Thread(
+                target=self._process_task,
+                args=(task, ch, method.delivery_tag)
+            )
+            thread.start()
         except Exception as e:
             logger.error(f"处理任务时出错: {e}")
+
+    def _process_task(self, task, ch, delivery_tag):
+        """在子线程中执行预处理任务"""
+
+        def _on_task_done(self, task, ch, delivery_tag):
+            try:
+                self._publish_status(task, TaskStatus.DONE, datetime.now())
+                ch.basic_ack(delivery_tag=delivery_tag)
+                logger.info(f"任务 {task.task_id} 处理完成")
+            except Exception as e:
+                logger.error(f"发送ACK或状态更新失败: {e}")
+
+        def _on_task_error(self, task, ch, delivery_tag, error):
             try:
                 self._publish_status(task, TaskStatus.FAILED, datetime.now())
-            except Exception as publish_error:
-                logger.error(f"发布失败结果时出错: {publish_error}")
-
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=False)
+                ch.basic_nack(delivery_tag=delivery_tag, requeue=False)
+                logger.error(f"任务 {task.task_id} 处理失败: {error}")
+            except Exception as e:
+                logger.error(f"发送NACK或失败状态失败: {e}")
+        try:
+            preprocess(task)
+            self.connection.add_callback_threadsafe(
+                lambda: _on_task_done(task, ch, delivery_tag)
+            )
+        except Exception as e:
+            logger.error(f"任务处理失败: {e}")
+            self.connection.add_callback_threadsafe(
+                lambda: _on_task_error(task, ch, delivery_tag, e)
+            )
 
     def _publish_status(self, task: Task, status: TaskStatus, dateTime: datetime):
         """更新 task 状态, 发布到结果队列"""
