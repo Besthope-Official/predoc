@@ -47,8 +47,8 @@ python run.py
 ### Install from Docker
 
 ```bash
-docker build -t rag:latest ./docker
-docker run -d --gpus=all rag:latest
+docker build -t predoc:latest .
+docker run --name predoc -d --gpus=all predoc:latest
 ```
 
 ## Getting started
