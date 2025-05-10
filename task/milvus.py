@@ -6,6 +6,7 @@ from config.backend import MilvusConfig
 from models import Task
 from loguru import logger
 import json
+import re
 
 _milvus_client = None
 _default_collection_name = MilvusConfig.default_collection_name
@@ -56,6 +57,10 @@ def _build_schema() -> None:
     schema.add_field(
         field_name="metadata",
         datatype=DataType.JSON
+    )
+    schema.add_field(
+        field_name="page",
+        datatype=DataType.INT64
     )
     return schema
 
@@ -136,11 +141,19 @@ def _store_embedding(
 
         data = []
 
+        page = 1
+        pattern = r"\[PAGE\]\[(\d+)\]\[PAGE\]"
         for i in range(len(embedding)):
+            current_page = re.findall(pattern, chunk_text[i])
+            if current_page:
+                # 如果有匹配的页码，取最后一个页码
+                page = int(current_page[-1])
+                chunk_text[i] = re.sub(pattern, "", chunk_text[i])
             tmp = {
                 "embedding": embedding[i],
                 "chunk": chunk_text[i],
-                "metadata": json.dumps(metadata[i])
+                "metadata": json.dumps(metadata[i]),
+                "page": page
             }
             data.append(tmp)
 
@@ -199,7 +212,7 @@ def search_embedding(
         data=[query_embedding],
         limit=top_k,
         search_params=search_params,
-        output_fields=["chunk", "metadata"]
+        output_fields=["chunk", "metadata", "page"],
     )
     
     return results
