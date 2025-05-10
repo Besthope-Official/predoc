@@ -6,7 +6,7 @@ from loguru import logger
 from config.backend import OSSConfig
 from prep.processor import PDFProcessor
 
-from task.oss import download_file, upload_file
+from task.oss import download_file, upload_file, clear_directory
 from task.milvus import store_embedding_task
 from models import Task
 
@@ -34,7 +34,7 @@ def preprocess(task: Task):
         processor = PDFProcessor(
             output_dir=save_path,
             parse_method="auto",
-            chunk_strategy="semantic_ollama",
+            chunk_strategy="semantic",
         )
 
         chunks, embeddings = processor.preprocess(
@@ -52,6 +52,12 @@ def preprocess(task: Task):
         logger.error(f"预处理任务 {task.task_id} 上传文件出错: {e}")
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
+            prefix = Path(task.document.fileName).stem
+            clear_directory(
+                prefix=prefix,
+                bucket_name=OSSConfig.pdf_bucket,
+                recursive=True
+            )
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
         raise
 

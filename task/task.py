@@ -1,8 +1,10 @@
 '''消费文档预处理的任务'''
 from datetime import datetime
-from loguru import logger
-import threading
+from typing import Optional
+from concurrent.futures import ThreadPoolExecutor
 import pika
+from loguru import logger
+
 from config.backend import RabbitMQConfig
 from task.preprocess import preprocess
 from models import TaskStatus, Task
@@ -18,27 +20,32 @@ class TaskConsumer:
                  config: RabbitMQConfig,
                  queue_name: str = "taskQueue",
                  result_queue_name: str = "respQueue",
-                 ):
+                 ) -> None:
         self.config = config
+        self.credentials = pika.PlainCredentials(
+            self.config.user, self.config.password)
+        self.parameters = pika.ConnectionParameters(
+            host=self.config.host,
+            port=self.config.port,
+            credentials=self.credentials,
+            heartbeat=600
+        )
+        
         self.queue_name = queue_name
         self.result_queue_name = result_queue_name
-        self.connection = None
-        self.channel = None
+        self.connection: Optional[pika.BlockingConnection] = None
+        self.channel: Optional[pika.channel.Channel] = None
+        # 4 threads for processing tasks
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
         self._connect()
 
-    def _connect(self):
+    def _connect(self) -> None:
         if self.connection and not self.connection.is_closed:
             return
         logger.info(f"Connecting to RabbitMQ Server: {self.config.host}...")
-        credentials = pika.PlainCredentials(
-            self.config.user, self.config.password)
-        parameters = pika.ConnectionParameters(
-            host=self.config.host,
-            port=self.config.port,
-            credentials=credentials
-        )
-        self.connection = pika.BlockingConnection(parameters)
+
+        self.connection = pika.BlockingConnection(self.parameters)
         self.channel = self.connection.channel()
 
         # create or check (by default, taskQueue is created on published side)
@@ -47,7 +54,12 @@ class TaskConsumer:
         logger.info(
             f"已连接到RabbitMQ，任务队列: {self.queue_name}，结果队列: {self.result_queue_name}")
 
-    def callback(self, ch, method, properties, body):
+    def callback(self,
+                 ch: pika.channel.Channel,
+                 method: pika.spec.Basic.Deliver,
+                 properties: pika.spec.BasicProperties,
+                 body: bytes
+                 ) -> None:
         """处理接收到的消息"""
         try:
             task = Task.from_json(body.decode('utf-8'))
@@ -55,18 +67,19 @@ class TaskConsumer:
             self._publish_status(task, TaskStatus.PROCESSING, datetime.now())
 
             # In case of preprocess task blocking main thread KEEPING HEARTBEAT
-            thread = threading.Thread(
-                target=self._process_task,
-                args=(task, ch, method.delivery_tag)
-            )
-            thread.start()
+            self.executor.submit(self._process_task, task,
+                                 ch, method.delivery_tag)
         except Exception as e:
             logger.error(f"处理任务时出错: {e}")
 
-    def _process_task(self, task, ch, delivery_tag):
+    def _process_task(self,
+                      task: Task,
+                      ch: pika.channel.Channel,
+                      delivery_tag: int
+                      ) -> None:
         """在子线程中执行预处理任务"""
 
-        def _on_task_done(self, task, ch, delivery_tag):
+        def _on_task_done(task, ch, delivery_tag):
             try:
                 self._publish_status(task, TaskStatus.DONE, datetime.now())
                 ch.basic_ack(delivery_tag=delivery_tag)
@@ -74,7 +87,7 @@ class TaskConsumer:
             except Exception as e:
                 logger.error(f"发送ACK或状态更新失败: {e}")
 
-        def _on_task_error(self, task, ch, delivery_tag, error):
+        def _on_task_error(task, ch, delivery_tag, error):
             try:
                 self._publish_status(task, TaskStatus.FAILED, datetime.now())
                 ch.basic_nack(delivery_tag=delivery_tag, requeue=False)
@@ -89,10 +102,14 @@ class TaskConsumer:
         except Exception as e:
             logger.error(f"任务处理失败: {e}")
             self.connection.add_callback_threadsafe(
-                lambda: _on_task_error(task, ch, delivery_tag, e)
+                lambda e_ref=e: _on_task_error(task, ch, delivery_tag, e_ref)
             )
 
-    def _publish_status(self, task: Task, status: TaskStatus, dateTime: datetime):
+    def _publish_status(self,
+                        task: Task,
+                        status: TaskStatus,
+                        dateTime: datetime
+                        ) -> None:
         """更新 task 状态, 发布到结果队列"""
         if not self.connection or self.connection.is_closed:
             self._connect()
@@ -114,7 +131,7 @@ class TaskConsumer:
         logger.info(
             f"任务 {task.task_id} 结果已发布到 {self.result_queue_name}，状态: {task.status}")
 
-    def start_consuming(self):
+    def start_consuming(self) -> None:
         """开始消费消息"""
         if not self.connection or self.connection.is_closed:
             self._connect()
