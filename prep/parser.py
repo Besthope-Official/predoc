@@ -1,7 +1,8 @@
 import os
 import re
 import json
-from typing import Tuple, Dict, Optional
+from pathlib import Path
+from typing import Tuple, Dict, Optional, List
 import numpy as np
 import fitz
 from loguru import logger
@@ -10,10 +11,10 @@ import pytesseract
 from huggingface_hub import hf_hub_download
 from doclayout_yolo import YOLOv10
 import cv2
-from pathlib import Path
 
 from config.backend import OSSConfig
 from task.oss import upload_file
+
 
 class Parser:
     def __init__(self):
@@ -50,7 +51,7 @@ class Parser:
         for d in dirs.values():
             d.mkdir(parents=True, exist_ok=True)
         return dirs["text"], dirs["formulas"], dirs["figures"], dirs["tables"], dirs["temp"]
-    
+
     @staticmethod
     def _upload_to_oss(save_path: str, object_name: str):
         upload_result = upload_file(
@@ -59,11 +60,113 @@ class Parser:
             bucket_name=OSSConfig.minio_bucket
         )
         logger.debug(f"upload to {upload_result}")
-    
-    def process_pdf(self, pdf_path: str, output_dir: str, upload_to_oss = False) -> str:
+
+    def _save_and_upload_file(self, content, save_path: Path, paper_title: str = None, upload_to_oss: bool = False):
+        save_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if isinstance(content, np.ndarray):
+            cv2.imwrite(str(save_path), content)
+        elif isinstance(content, str):
+            with open(save_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        elif isinstance(content, dict) or isinstance(content, list):
+            with open(save_path, "w", encoding="utf-8") as f:
+                json.dump(content, f, ensure_ascii=False, indent=2)
+
+        logger.info(f"已保存: {save_path}")
+
+        if upload_to_oss:
+            if paper_title:
+                object_name = f"{paper_title}/{save_path.name}"
+            else:
+                object_name = save_path.name
+
+            self._upload_to_oss(str(save_path), object_name)
+
+        return str(save_path)
+
+    def _process_page(self, page, page_num: int, temp_dir: Path, counters: Dict,
+                      content_index: List, paper_title: str, upload_to_oss: bool,
+                      formulas_dir: Path, figures_dir: Path, tables_dir: Path) -> Tuple[List[str], bool]:
+        zoom = 4
+        mat = fitz.Matrix(zoom, zoom)
+        pix = page.get_pixmap(matrix=mat, alpha=False)
+
+        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+        temp_img_path = temp_dir / f"temp_page_{page_num}.png"
+        img.save(temp_img_path, "PNG", compress_level=0)
+
+        cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+        det_res = self.model.predict(
+            str(temp_img_path), imgsz=1024, conf=0.25, device="cuda:0")
+        results = det_res[0]
+
+        text_blocks = []
+        found_references = False
+        sorted_boxes = sorted(results.boxes.data.tolist(), key=lambda x: x[1])
+
+        for box in sorted_boxes:
+            x1, y1, x2, y2, conf, cls = map(int, box[:6])
+            crop_img = cv_img[y1:y2, x1:x2]
+
+            element_type = self._get_element_type(cls)
+            if not element_type:
+                continue
+
+            if element_type != "text":
+                element_dir = {
+                    "formula": formulas_dir,
+                    "figure": figures_dir,
+                    "table": tables_dir
+                }[element_type]
+
+                filename = f"{element_type}_{counters[element_type]}.png"
+                save_path = element_dir / filename
+                saved_path = self._save_and_upload_file(
+                    crop_img,
+                    save_path,
+                    paper_title=paper_title if upload_to_oss else None,
+                    upload_to_oss=upload_to_oss
+                )
+
+                marker = f"[/{element_type}][{counters[element_type]}][/{element_type}]"
+                content_index.append({
+                    "type": element_type,
+                    "id": counters[element_type],
+                    "page": page_num + 1,
+                    "bbox": (x1, y1, x2, y2),
+                    "image_path": saved_path,
+                    "context_marker": marker
+                })
+
+                counters[element_type] += 1
+                text_blocks.append(marker)
+            else:
+                text = self._process_text_block(crop_img)
+                if re.fullmatch(
+                    r'^\s*(参考文献|参考书目|引用文献|References?|Bibliography)[\s\.:：]*$',
+                    text,
+                    flags=re.IGNORECASE
+                ):
+                    found_references = True
+                elif len(text) < 20 and re.search(
+                    r'\b(refs?|biblio)\b',
+                    text,
+                    flags=re.IGNORECASE
+                ):
+                    found_references = True
+
+                text_blocks.append(text.strip())
+
+        os.remove(temp_img_path)
+        return text_blocks, found_references
+
+    def process_pdf(self, pdf_path: str, output_dir: str, upload_to_oss=False) -> str:
+        """处理PDF文件，提取结构化内容"""
         paper_title = os.path.splitext(os.path.basename(pdf_path))[0]
         paper_output_dir = Path(output_dir) / paper_title
-        text_dir, formulas_dir, figures_dir, tables_dir, temp_dir = self.ensure_output_dirs(paper_output_dir)
+        text_dir, formulas_dir, figures_dir, tables_dir, temp_dir = self.ensure_output_dirs(
+            paper_output_dir)
 
         doc = fitz.open(pdf_path)
         all_text = []
@@ -77,76 +180,32 @@ class Parser:
                 break
 
             page = doc.load_page(page_num)
-            zoom = 4
-            mat = fitz.Matrix(zoom, zoom)
-            pix = page.get_pixmap(matrix=mat, alpha=False)
+            text_blocks, page_has_references = self._process_page(
+                page, page_num, temp_dir, counters, content_index,
+                paper_title, upload_to_oss, formulas_dir, figures_dir, tables_dir
+            )
 
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            temp_img_path = temp_dir / f"temp_page_{page_num}.png"
-            img.save(temp_img_path, "PNG", compress_level=0)
-
-            cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
-            det_res = self.model.predict(
-                str(temp_img_path), imgsz=1024, conf=0.25, device="cuda:0")
-            results = det_res[0]
-
-            text_blocks = []
-            sorted_boxes = sorted(
-                results.boxes.data.tolist(), key=lambda x: x[1])
-            for box in sorted_boxes:
-                x1, y1, x2, y2, conf, cls = map(int, box[:6])
-                crop_img = cv_img[y1:y2, x1:x2]
-
-                element_type = self._get_element_type(cls)
-                if not element_type:
-                    continue
-
-                if element_type != "text":
-                    save_path, marker = self._save_non_text_element(
-                        element_type, counters, crop_img, locals()[
-                            f"{element_type}s_dir"]
-                    )
-                    content_index.append({
-                        "type": element_type,
-                        "id": counters[element_type],
-                        "page": page_num + 1,
-                        "bbox": (x1, y1, x2, y2),
-                        "image_path": save_path,
-                        "context_marker": marker
-                    })
-                    counters[element_type] += 1
-                    text_blocks.append(marker)
-                    if upload_to_oss:
-                        self._upload_to_oss(
-                            save_path=save_path,
-                            object_name=f"{paper_title}/{element_type}/{Path(save_path).name}")
-                else:
-                    text = self._process_text_block(crop_img)
-                    if re.fullmatch(
-                        r'^\s*(参考文献|参考书目|引用文献|References?|Bibliography)[\s\.:：]*$',
-                        text,
-                        flags=re.IGNORECASE
-                    ):
-                        found_references = True
-                    elif len(text) < 20 and re.search(
-                        r'\b(refs?|biblio)\b',
-                        text,
-                        flags=re.IGNORECASE
-                    ):
-                        found_references = True
-                    text_blocks.append(text.strip())
+            found_references = found_references or page_has_references
 
             if text_blocks and not found_references:
                 page_text = "\n\n".join(text_blocks)
                 all_text.append(f"[PAGE][{page_num + 1}][PAGE]\n{page_text}")
 
-            os.remove(temp_img_path)
+        self._save_and_upload_file(
+            content_index,
+            paper_output_dir / Path("content_index.json"),
+            paper_title=paper_title,
+            upload_to_oss=upload_to_oss)
 
-        index_path = paper_output_dir / "content_index.json"
-        with open(index_path, "w", encoding="utf-8") as f:
-            json.dump(content_index, f, ensure_ascii=False, indent=2)
+        parsed_text = "\n\n".join(all_text)
+        self._save_and_upload_file(
+            parsed_text,
+            paper_output_dir / Path("text.txt"),
+            paper_title=paper_title,
+            upload_to_oss=upload_to_oss
+        )
 
-        return "\n\n".join(all_text)
+        return parsed_text
 
     def _get_element_type(self, cls: int) -> Optional[str]:
         if cls == 2:
@@ -160,13 +219,6 @@ class Parser:
         elif cls in (0, 1):
             return "text"
         return None
-
-    def _save_non_text_element(self, element_type: str, counters: Dict, crop_img: np.ndarray, save_dir: Path) -> Tuple[str, str]:
-        filename = f"{element_type}_{counters[element_type]}.png"
-        save_path = save_dir / filename
-        cv2.imwrite(str(save_path), crop_img)
-        logger.info(f"保存 {element_type} 到 {save_path}")
-        return str(save_path), f"[/{element_type}][{counters[element_type]}][/{element_type}]"
 
     def _process_text_block(self, crop_img: np.ndarray) -> str:
         gray = cv2.cvtColor(crop_img, cv2.COLOR_BGR2GRAY)

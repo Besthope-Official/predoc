@@ -2,7 +2,7 @@
 提供 OSS (基于 MinIO) 文件上传和下载功能
 """
 import os
-from typing import Optional, Union, IO
+from typing import Optional, Union, IO, List
 from pathlib import Path
 from minio import Minio
 from minio.error import S3Error
@@ -115,3 +115,54 @@ def download_file(
     )
 
     return file_path
+
+
+def clear_directory(
+    prefix: str,
+    bucket_name: Optional[str] = OSSConfig.pdf_bucket,
+    recursive: bool = True
+) -> int:
+    """
+    清空OSS中指定前缀（目录）下的所有对象
+
+    Args:
+        prefix: 对象存储中的前缀（目录路径）
+        bucket_name: 存储桶名称，默认使用配置中的存储桶
+        recursive: 是否递归删除子目录中的对象，默认为True
+
+    Returns:
+        删除的对象数量
+
+    Raises:
+        S3Error: OSS操作错误
+    """
+    client = get_minio_client()
+
+    try:
+        if prefix and not prefix.endswith('/'):
+            prefix = prefix + '/'
+
+        objects_to_delete = []
+        for obj in client.list_objects(bucket_name, prefix=prefix, recursive=recursive):
+            objects_to_delete.append(obj.object_name)
+
+        if not objects_to_delete:
+            logger.info(f"目录 {prefix} 在存储桶 {bucket_name} 中没有对象")
+            return 0
+
+        errors = 0
+        for err in client.remove_objects(bucket_name, objects_to_delete):
+            logger.error(f"删除对象时出错: {err}")
+            errors += 1
+
+        deleted_count = len(objects_to_delete) - errors
+        logger.info(
+            f"成功从存储桶 {bucket_name} 的目录 {prefix} 中删除了 {deleted_count} 个对象")
+
+        return deleted_count
+    except S3Error as e:
+        logger.error(f"清空存储桶 {bucket_name} 中的目录 {prefix} 失败: {e}")
+        raise
+    except Exception as e:
+        logger.error(f"清空目录时发生未知错误: {e}")
+        raise
