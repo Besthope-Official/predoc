@@ -35,6 +35,7 @@ def preprocess(task: Task):
             output_dir=save_path,
             parse_method="auto",
             chunk_strategy="semantic",
+            upload_to_oss=True
         )
 
         chunks, embeddings = processor.preprocess(
