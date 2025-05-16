@@ -117,6 +117,32 @@ def download_file(
     return file_path
 
 
+def check_file_exists(
+    object_name: str,
+    bucket_name: Optional[str] = OSSConfig.minio_bucket
+) -> bool:
+    """
+    检查 OSS 中的文件是否存在
+
+    Args:
+        object_name: 对象存储中的文件名
+        bucket_name: 存储桶名称，默认使用配置中（解析后文件）的存储桶
+
+    Returns:
+        bool: 文件是否存在
+    """
+    client = get_minio_client()
+
+    try:
+        return client.stat_object(bucket_name, object_name) is not None
+    except S3Error as e:
+        if e.code == 'NoSuchKey':
+            return False
+        else:
+            logger.error(f"检查文件 {object_name} 是否存在时出错: {e}")
+            raise
+
+
 def clear_directory(
     prefix: str,
     bucket_name: Optional[str] = OSSConfig.pdf_bucket,

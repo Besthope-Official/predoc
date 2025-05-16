@@ -1,6 +1,7 @@
 """
 提供milvus向量数据库的插入和查询功能
 """
+from typing import List
 from pymilvus import MilvusClient, DataType
 from config.backend import MilvusConfig
 from models import Task
@@ -152,7 +153,7 @@ def _store_embedding(
             tmp = {
                 "embedding": embedding[i],
                 "chunk": chunk_text[i],
-                "metadata": json.dumps(metadata[i]),
+                "metadata": json.dumps(metadata[i], ensure_ascii=False),
                 "page": page
             }
             data.append(tmp)
@@ -190,7 +191,7 @@ def search_embedding(
     top_k: int = 3,
     collection_name: str = _default_collection_name,
     partition_name: str = _default_partition_name,
-) -> list:
+) -> List[List[dict]]:
     """
     查询集合中的向量数据
     """

@@ -1,6 +1,6 @@
 # Predoc
 
-Preprocess document service for RAG(Retriveal Augumented Generation)
+Preprocess document service for RAG (Retriveal Augumented Generation)
 
 ## Usage
 

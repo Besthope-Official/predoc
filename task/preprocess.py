@@ -6,15 +6,19 @@ from loguru import logger
 from config.backend import OSSConfig
 from prep.processor import PDFProcessor
 
-from task.oss import download_file, upload_file, clear_directory
+from task.oss import download_file, upload_file, clear_directory, check_file_exists
 from task.milvus import store_embedding_task
 from models import Task
 
 
-def preprocess(task: Task):
+def preprocess(task: Task, use_cached: bool = True) -> None:
     """
     进行预处理任务，从 OSS 上获取文件，并进行预处理
     预处理后得到的图表等文件会上传到 OSS 上
+    最后将处理结果存储到 Milvus 中
+
+    Args:
+        use_cached: 是否使用已解析的文本，跳过解析步骤
     """
     try:
         temp_base_dir = Path(os.environ.get('TEMP', '/tmp'))
@@ -23,31 +27,48 @@ def preprocess(task: Task):
 
         file_name_without_extension = Path(task.document.fileName).stem
         local_file_path = temp_dir / task.document.fileName
-        download_file(
-            object_name=task.document.fileName,
-            file_path=local_file_path
-        )
-        logger.info(
-            f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}")
 
-        save_path = temp_dir
         processor = PDFProcessor(
             output_dir=save_path,
             parse_method="auto",
             chunk_strategy="semantic",
             upload_to_oss=True
         )
+        if use_cached or check_file_exists(f"{file_name_without_extension}/text.txt"):
+            parsed_text = f"{file_name_without_extension}/text.txt"
+            local_text_path = temp_dir / "text.txt"
 
-        chunks, embeddings = processor.preprocess(
-            file_path=str(local_file_path),
-            warpper=False
-        )
+            download_file(
+                object_name=parsed_text,
+                file_path=local_text_path,
+                bucket_name=OSSConfig.minio_bucket
+            )
+            logger.info(f"预解析文件 {parsed_text} 已从 OSS 下载到 {local_text_path}")
+            with open(local_text_path, "r", encoding="utf-8") as f:
+                text = f.read()
 
-        logger.info(
-            f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {save_path}")
+            chunks = processor.chunk(text)
+            embeddings = processor.embeddings(chunks)
+        else:
+            download_file(
+                object_name=task.document.fileName,
+                file_path=local_file_path
+            )
+            logger.info(
+                f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}")
 
-        shutil.rmtree(temp_dir)
-        logger.info(f"临时目录 {temp_dir} 已清理")
+            save_path = temp_dir
+
+            chunks, embeddings = processor.preprocess(
+                file_path=str(local_file_path),
+                warpper=False
+            )
+
+            logger.info(
+                f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {save_path}")
+
+            shutil.rmtree(temp_dir)
+            logger.info(f"临时目录 {temp_dir} 已清理")
 
     except Exception as e:
         logger.error(f"预处理任务 {task.task_id} 上传文件出错: {e}")

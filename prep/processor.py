@@ -18,7 +18,7 @@ class Processor:
     """数据预处理接口，需实现 parse 和 chunk 方法"""
     BASE_EMBD_MODEL = ModelConfig.EMBEDDING_MODEL
 
-    def __init__(self, output_dir = ModelConfig.CHUNK_OUTPUT_DIR,
+    def __init__(self, output_dir=ModelConfig.CHUNK_OUTPUT_DIR,
                  parse_method="auto",
                  chunk_strategy="semantic_ollama"):
         self.output_dir = output_dir
@@ -48,13 +48,18 @@ class Processor:
         embedding = model.encode(text).tolist()
         return embedding
 
+    def embeddings(self, chunks: list[str]) -> np.ndarray:
+        embd_model_info = init_model()
+        embeddings = generate_embeddings(embd_model_info, chunks)
+        return embeddings
+
     @staticmethod
     def _wrapper(chunks: list[str], embeddings: np.ndarray) -> list[dict]:
         """包装分块和嵌入"""
         return [{"chunk": chunk, "embedding": embedding.tolist()}
                 for chunk, embedding in zip(chunks, embeddings)]
 
-    def preprocess(self, file_path: str, warpper = True):
+    def preprocess(self, file_path: str, warpper=True):
         """预处理文档"""
         try:
             text = self.parse(file_path)
@@ -67,8 +72,7 @@ class Processor:
             raise Exception(f"分块文本失败: {e}")
 
         try:
-            embd_model_info = init_model()
-            embeddings = generate_embeddings(embd_model_info, chunks)
+            embeddings = self.embeddings(chunks)
             if warpper:
                 return self._wrapper(chunks, embeddings)
             else:
@@ -86,7 +90,8 @@ class PDFProcessor(Processor):
     def parse(self, file_path: str) -> str:
         """解析PDF文档，根据解析方法提取文本"""
         if self.parse_method == "auto" or self.parse_method == "yolo":
-            text = parser.process_pdf(file_path, self.output_dir, upload_to_oss=True)
+            text = parser.process_pdf(
+                file_path, self.output_dir, upload_to_oss=True)
 
         if not text.strip():
             raise ParseResultEmptyException("提取文本为空")
@@ -97,4 +102,4 @@ class PDFProcessor(Processor):
         if not text.strip():
             return []
         doc_list = chunker.split_text(text, self.chunk_strategy)
-        return [doc.page_content for doc in doc_list]   
+        return [doc.page_content for doc in doc_list]

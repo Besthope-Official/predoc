@@ -21,6 +21,8 @@ class ModelConfig:
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
     MAX_LENGTH: int = field(default_factory=lambda: int(
         os.getenv("MAX_LENGTH", "512")))
+    TOKENIZERS_PARALLELISM: bool = field(
+        default_factory=lambda: os.getenv("TOKENIZERS_PARALLELISM", "false").lower() == "true")
 
     def validate_path(self, path: str, needs_write: bool = True) -> str:
         dir_path = os.path.dirname(path) or path
