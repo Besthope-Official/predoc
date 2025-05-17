@@ -138,16 +138,17 @@ class TwoStageSemanticChunker:
         if current_section:
             sections.append("".join(current_section))
         return sections
-    
+
     @staticmethod
     def _remove_thinking(text: str) -> str:
         '''
         对于推理系大模型, 输出如 `<think><Thinking Process></think>\n<Answer>`, 仅保留 `<Answer>` 部分
         '''
-        cleaned_text = re.sub(r'(?i)<think>.*?</think>', '', text, flags=re.DOTALL)
+        cleaned_text = re.sub(r'(?i)<think>.*?</think>',
+                              '', text, flags=re.DOTALL)
         cleaned_text = re.sub(r'\n\s*\n', '\n\n', cleaned_text)
         cleaned_text = cleaned_text.lstrip()
-        
+
         return cleaned_text
 
     def create_semantic_chunks(self, text: str) -> List[str]:
@@ -223,8 +224,11 @@ class Chunker:
 
         for section in sections:
             all_chunks.extend(chunk_method(section))
-
-        return self._reconstruct_chunks(all_chunks, markers, pages, len(clean_text))
+        text = self._reconstruct_chunks(
+            all_chunks, markers, pages, len(clean_text))
+        assert len(
+            text) <= CONFIG.CHUNK_SIZE, f"分块后文本长度超过限制: {len(text)} > {CONFIG.CHUNK_SIZE}"
+        return text
 
     def _extract_markers(self, text: str) -> tuple[List, List, str]:
         markers = []

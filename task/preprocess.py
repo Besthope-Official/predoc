@@ -29,13 +29,13 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
         local_file_path = temp_dir / task.document.fileName
 
         processor = PDFProcessor(
-            output_dir=save_path,
+            output_dir=temp_dir,
             parse_method="auto",
             chunk_strategy="semantic",
             upload_to_oss=True
         )
-        if use_cached or check_file_exists(f"{file_name_without_extension}/text.txt"):
-            parsed_text = f"{file_name_without_extension}/text.txt"
+        parsed_text = f"{file_name_without_extension}/text.txt"
+        if use_cached and check_file_exists(parsed_text):
             local_text_path = temp_dir / "text.txt"
 
             download_file(
@@ -57,27 +57,25 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             logger.info(
                 f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}")
 
-            save_path = temp_dir
-
             chunks, embeddings = processor.preprocess(
                 file_path=str(local_file_path),
                 warpper=False
             )
 
             logger.info(
-                f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {save_path}")
+                f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {temp_dir}")
 
             shutil.rmtree(temp_dir)
             logger.info(f"临时目录 {temp_dir} 已清理")
 
     except Exception as e:
-        logger.error(f"预处理任务 {task.task_id} 上传文件出错: {e}")
+        logger.error(f"预处理任务 {task.task_id} 出错: {e}")
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
             prefix = Path(task.document.fileName).stem
             clear_directory(
                 prefix=prefix,
-                bucket_name=OSSConfig.pdf_bucket,
+                bucket_name=OSSConfig.minio_bucket,
                 recursive=True
             )
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")

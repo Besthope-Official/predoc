@@ -3,6 +3,8 @@ from dataclasses import dataclass, field
 from typing import List
 from loguru import logger
 
+os.environ['TOKENIZERS_PARALLELISM'] = "true"
+
 
 @dataclass
 class ModelConfig:
@@ -21,8 +23,6 @@ class ModelConfig:
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
     MAX_LENGTH: int = field(default_factory=lambda: int(
         os.getenv("MAX_LENGTH", "512")))
-    TOKENIZERS_PARALLELISM: bool = field(
-        default_factory=lambda: os.getenv("TOKENIZERS_PARALLELISM", "false").lower() == "true")
 
     def validate_path(self, path: str, needs_write: bool = True) -> str:
         dir_path = os.path.dirname(path) or path
@@ -39,12 +39,6 @@ class ModelConfig:
             raise
 
     def __post_init__(self):
-        if not self.CHUNKS_FILE:
-            self.CHUNKS_FILE = os.path.join(
-                self.CHUNK_OUTPUT_DIR, "chunks_metadata.pkl")
-        self.CHUNK_OUTPUT_DIR = self.validate_path(self.CHUNK_OUTPUT_DIR)
-        self.CHUNKS_FILE = self.validate_path(self.CHUNKS_FILE)
-
         try:
             if not 1 <= self.BATCH_SIZE <= 64:
                 raise ValueError("BATCH_SIZE 应在 1-64 之间")
