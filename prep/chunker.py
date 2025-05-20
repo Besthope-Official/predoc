@@ -3,96 +3,85 @@
 import re
 import requests
 from typing import List
-from loguru import logger
-from langchain.docstore.document import Document as LangChainDocument
+from multiprocessing import cpu_count
 from concurrent.futures import ThreadPoolExecutor
+from abc import ABC
+from loguru import logger
+from openai import OpenAI
 
 from config.model import CONFIG
-from .parser import Parser
+from config.api import ChunkAPIConfig
+from config.app import Config
+from .prompt import CHUNK_SYSTEM_PROMPT_TEMPLATE, CHUNK_PROMPT_TEMPLATE
+from .utils import TextSplitter, extract_markers, reconstruct_chunks
 
 
-class TwoStageSemanticChunker:
-    def __init__(self, model_name="gemma2:27b", host="http://127.0.0.1:11434"):
-        self.model_name = model_name
-        self.host = host
-        self.api_url = f"{host}/api/generate"
-        self.executor = ThreadPoolExecutor(max_workers=4)
+class Chunker(ABC):
+    '''Base interface for chunker.'''
 
-    def _call_ollama(self, prompt: str, system_prompt: str = None) -> str:
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False
-        }
-        if system_prompt:
-            payload["system"] = system_prompt
+    def __init__(self, enable_parallelism: bool):
+        self.enable_parallelism = enable_parallelism
+        if enable_parallelism:
+            self.num_workers = self._get_optimal_worker_count()
+
+    def split_text(self, text: str) -> List[str]:
+        """Base method to split text into desired chunks. Text MAX_LENGTH is constrained by `CONFIG.CHUNK_SIZE`."""
+        raise NotImplementedError("chunk method not implemented")
+
+    @staticmethod
+    def _get_optimal_worker_count() -> int:
+        """Get the optimal number of workers for parallel processing."""
         try:
-            response = requests.post(self.api_url, json=payload)
-            response.raise_for_status()
-            return response.json()["response"]
+            cpu_cores = cpu_count()
+            return min(8, max(1, cpu_cores * 3 // 4))
         except Exception as e:
-            logger.error(f"API调用失败: {e}")
-            return ""
+            logger.warning(
+                f"Proceeding with 1 worker. Error calculating optimal worker count: {e}"
+            )
+            return 1
 
-    def split_text_into_sections(self, text: str, max_section_length=1500):
-        """将文本分割成适合模型处理的大段"""
-        paragraphs = re.split(r'\n\s*\n', text)
-        paragraphs = [p.strip() for p in paragraphs if p.strip()]
+    def _parallel_batch_processing(self, texts: List[str]) -> List[str]:
+        logger.debug(
+            f"Using {self.num_workers} workers for parallel processing.")
+        results = []
+        with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
+            all_results = executor.map(self.split_text, texts)
+            for result in all_results:
+                results.extend(result)
+        return results
 
-        sections = []
-        current_section = []
-        current_length = 0
+    def chunk(self, text: str) -> List:
+        """Chunk text.
 
-        for para in paragraphs:
-            para_length = len(para)
-            if para_length > max_section_length:
-                if current_section:
-                    sections.append("\n\n".join(current_section))
-                    current_section = []
-                    current_length = 0
+        Args:
+            text: The text to be chunked. Text will first be split into smaller sections, then call `split_text` to split each section into chunks.
+        """
+        if len(text) < CONFIG.MIN_CHUNK_LENGTH:
+            return []
 
-                sentences = re.split(r'(?<=[。！？.!?])', para)
-                sentences = [s.strip() for s in sentences if s.strip()]
+        markers, pages, clean_text = extract_markers(text)
+        sections = TextSplitter.split_text_into_sections(clean_text)
 
-                temp_section = []
-                temp_length = 0
+        all_chunks = []
+        if not self.enable_parallelism:
+            for section in sections:
+                all_chunks.extend(self.split_text(section))
+        else:
+            logger.info("使用多线程分块...")
+            all_chunks = self._parallel_batch_processing(sections)
+        text = reconstruct_chunks(
+            all_chunks, markers, pages, len(clean_text))
+        return text
 
-                for sentence in sentences:
-                    sentence_length = len(sentence)
-                    if temp_length + sentence_length > max_section_length and temp_section:
-                        sections.append("".join(temp_section))
-                        temp_section = [sentence]
-                        temp_length = sentence_length
-                    else:
-                        temp_section.append(sentence)
-                        temp_length += sentence_length
 
-                if temp_section:
-                    sections.append("".join(temp_section))
-            elif current_length + para_length + 2 > max_section_length and current_section:
-                sections.append("\n\n".join(current_section))
-                current_section = [para]
-                current_length = para_length
-            else:
-                current_section.append(para)
-                current_length += para_length + 2
+class SentenceChunker(Chunker):
+    """使用简单的基于句子的方法创建语义块"""
 
-        if current_section:
-            sections.append("\n\n".join(current_section))
+    def __init__(self, enable_parallelism: bool = Config.ENABLE_PARALLELISM):
+        super().__init__(enable_parallelism=enable_parallelism)
 
-        logger.info(
-            f"文本已分割为 {len(sections)} 个大段，平均每段 {sum(len(s) for s in sections) / len(sections):.2f} 字符")
-        return sections
-
-    def split_into_sentences(self, text):
-        """将文本分割成句子"""
-        sentences = re.split(r'(?<=[。！？.!?])', text)
-        return [s.strip() for s in sentences if s.strip()]
-
-    def create_semantic_chunks_simple(self, text):
-        """使用简单的基于句子的方法创建语义块"""
-        logger.info("使用备选分块方法...")
-        sentences = self.split_into_sentences(text)
+    def split_text(self, text: str) -> List[str]:
+        sentences = TextSplitter.split_into_sentences(text)
 
         if len(sentences) <= 3:
             logger.debug("句子数量不足，返回原始文本")
@@ -110,34 +99,48 @@ class TwoStageSemanticChunker:
 
         if current_chunk:
             chunks.append("".join(current_chunk))
-
-        logger.info(f"备选方法生成了 {len(chunks)} 个语义块")
         return chunks
 
-    def _split_long_paragraph(self, para: str, max_length: int) -> List[str]:
-        sentences = re.split(r'(?<=[。！？.!?])', para)
-        sections = []
-        current_section = []
-        current_length = 0
 
-        for sentence in sentences:
-            sentence = sentence.strip()
-            if not sentence:
-                continue
+class LLMChunker(Chunker):
+    '''LLM-based Chunker. Similar to https://docs.chonkie.ai/python-sdk/chunkers/slumber-chunker, 
+       use a prompt template to chunk text into smaller pieces.
+       You can change API backend to use Ollama or any OpenAI-compatible LLM API.
+    '''
 
-            sent_length = len(sentence)
-            if current_length + sent_length > max_length:
-                if current_section:
-                    sections.append("".join(current_section))
-                current_section = [sentence]
-                current_length = sent_length
-            else:
-                current_section.append(sentence)
-                current_length += sent_length
+    def __init__(self,
+                 backend='api',
+                 ollama_api_host="http://127.0.0.1:11434",
+                 model_name=ChunkAPIConfig.MODEL_NAME,
+                 api_base=ChunkAPIConfig.API_URL,
+                 api_key=ChunkAPIConfig.API_KEY,
+                 enable_parallelism=Config.ENABLE_PARALLELISM,
+                 ):
+        '''Initialize the LLMChunker with specified backend and API configurations.
 
-        if current_section:
-            sections.append("".join(current_section))
-        return sections
+        Args:
+            backend: The API backend to use. Either 'api' for OpenAI-compatible
+                APIs or 'ollama' for Ollama API. Defaults to 'api'.
+            ollama_api_host: The host URL for the Ollama API.
+                Defaults to `http://127.0.0.1:11434`.
+            model_name: The name of the LLM model to use.
+                Defaults to `ChunkAPIConfig.MODEL_NAME`.
+            api_base: The base URL for the OpenAI-compatible API.
+                Defaults to `ChunkAPIConfig.API_URL`.
+            api_key: The API key for the OpenAI-compatible API.
+                Defaults to `ChunkAPIConfig.API_KEY`.
+            enable_parallelism: Use multi-threading for chunking. Defaults to `False`.
+        '''
+        super().__init__(enable_parallelism=enable_parallelism)
+        self.num_workers = min(self.num_workers, ChunkAPIConfig.MAX_QPS)
+        self.model_name = model_name
+        logger.debug(f"Using {self.model_name} as chunker LLM...")
+        self.backend = backend
+        self.ollama_api_host = ollama_api_host
+        self.ollama_api_url = f"{ollama_api_host}/api/generate"
+        self.api_url = api_base
+        self.api_key = api_key
+        self.client = OpenAI(base_url=api_base, api_key=api_key)
 
     @staticmethod
     def _remove_thinking(text: str) -> str:
@@ -151,38 +154,82 @@ class TwoStageSemanticChunker:
 
         return cleaned_text
 
-    def create_semantic_chunks(self, text: str) -> List[str]:
+    @staticmethod
+    def create_sentence_chunks(text: str) -> List[str]:
+        """使用简单的基于句子的方法创建语义块"""
+        logger.debug("使用备选分块方法...")
+
+        chunker = SentenceChunker()
+        chunks = chunker.split_text(text)
+
+        logger.debug(f"备选方法生成了 {len(chunks)} 个语义块")
+        return chunks
+
+    def _call_ollama(self, prompt: str, system_prompt: str = None) -> str:
+        payload = {
+            "model": self.model_name,
+            "prompt": prompt,
+            "stream": False
+        }
+        if system_prompt:
+            payload["system"] = system_prompt
+        try:
+            response = requests.post(self.ollama_api_url, json=payload)
+            response.raise_for_status()
+            return response.json()["response"]
+        except Exception as e:
+            logger.error(f"API调用失败: {e}")
+            return ""
+
+    def _call_open_api(self, prompt: str, system_prompt: str = None) -> str:
+        try:
+            messages = []
+            full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
+            messages.append({"role": "user", "content": full_prompt})
+            response = self.client.chat.completions.create(
+                model=self.model_name,
+                messages=messages,
+                temperature=0.7,
+                stream=False
+            )
+            content = response.choices[0].message.content.strip()
+            if not content:
+                raise ValueError(f"模型 {self.model_name} 返回空结果")
+            return content
+        except Exception as e:
+            logger.error(
+                f"API 调用失败: {e}, 请求: {prompt[:100]}...", exc_info=True)
+            raise e
+
+    def split_text(self, text: str) -> List[str]:
         if len(text) < 100:
             return [text]
 
-        system_prompt = """你是一个专门用于文本分块的AI助手。你的任务是分析给定文本，并识别语义边界，将文本分割成多个语义连贯的块。
-        重要规则：
-        1. 不要更改原文的任何内容，包括标点符号和空格
-        2. 只在自然的语义边界处进行分块，通常是在一个主题结束、另一个主题开始的地方
-        3. 分块后内容按顺序拼接应该与原文完全一致
-        4. 如果文章内容较少，可以分成较少的块（2-3个）
-        5. 如果文章内容较多，可以分成更多的块（4-6个）
-        """
+        # Note, if one of the following conditions met:
+        # 1. Ollama failed (e.g. ollama API request failed, specified model not found, etc.),
+        # 2. result_chunks <= 1,
+        # 3. LLM-based chunk performance is bad,
+        # rule-based chunker (create_sentence_chunks) will be used.
+        prompt = CHUNK_PROMPT_TEMPLATE.format(text=text)
 
-        prompt = f"""分析以下文本，将其分割成多个语义连贯的块。
-        规则:
-        - 不要删除、修改或概括任何原文
-        - 在自然的语义边界处分块，如主题变化、段落转换等地方（必须在句子结束处分块，不能破坏句子的完整性）
-        - 分块的数量根据文本长度适当调整，短文本2-3个块，长文本4-6个块
-        - 返回格式：每个块之间使用 [CHUNK_BREAK] 分隔
-        文本:
-        {text}
-        分块结果:"""
+        if self.backend == 'ollama':
+            response = self._call_ollama(
+                prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
+        elif self.backend == 'api':
+            response = self._call_open_api(
+                prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
 
-        response = self._call_ollama(prompt, system_prompt)
+        # In case of using reasoning model
+        # It's not recommended to use reasoning model(e.g. Deepseek-R1) for chunking,
+        # as it requires more **TIME** and **TOKEN COST**
         cleaned_text = self._remove_thinking(response)
+        
         result_chunks = [chunk.strip() for chunk in cleaned_text.split(
             "[CHUNK_BREAK]") if chunk.strip()]
-        logger.debug(result_chunks)
 
         if len(result_chunks) <= 1:
             logger.warning("LLM只生成了一个块或返回空结果，使用备选分块方法")
-            return self.create_semantic_chunks_simple(text)
+            return self.create_sentence_chunks(text)
 
         # In case of LLM adds or removes some content unexpectedly
         reconstructed_text = "".join([chunk.strip()
@@ -195,88 +242,6 @@ class TwoStageSemanticChunker:
         # NO RETRY, use second choice for convenience
         if similarity_ratio < 0.95 or similarity_ratio > 1.05:
             logger.warning(
-                f"分块内容与原文不匹配 (相似度比例: {similarity_ratio:.4f})，使用备选分块方法")
-            return self.create_semantic_chunks_simple(text)
+                f"分块内容与原文不匹配 (原文长度：{len(original_text)} 分块后：{len(reconstructed_text)} 相似度比例: {similarity_ratio:.4f})")
+            return self.create_sentence_chunks(text)
         return result_chunks
-
-
-class Chunker:
-    def __init__(self, model_name="gemma2:27b", host="http://127.0.0.1:11434"):
-        self.chunker = TwoStageSemanticChunker(model_name, host)
-
-    def split_text(self, text: str, strategy='semantic') -> List[LangChainDocument]:
-        text = Parser.clean_text(text)
-        if len(text) < CONFIG.MIN_CHUNK_LENGTH:
-            return []
-        markers, pages, clean_text = self._extract_markers(text)
-        sections = self.chunker.split_text_into_sections(clean_text)
-
-        all_chunks = []
-        if strategy == 'semantic':
-            chunk_method = self.chunker.create_semantic_chunks_simple
-        # Note, if one of the following conditions met:
-        # 1. Ollama failed (e.g. ollama API request failed, specified model not found, etc.),
-        # 2. result_chunks <= 1,
-        # 3. LLM-based chunk performance is bad,
-        # rule-based chunker (create_semantic_chunks_simple) will be used.
-        elif strategy == 'semantic_ollama':
-            chunk_method = self.chunker.create_semantic_chunks
-
-        for section in sections:
-            all_chunks.extend(chunk_method(section))
-        text = self._reconstruct_chunks(
-            all_chunks, markers, pages, len(clean_text))
-        assert len(
-            text) <= CONFIG.CHUNK_SIZE, f"分块后文本长度超过限制: {len(text)} > {CONFIG.CHUNK_SIZE}"
-        return text
-
-    def _extract_markers(self, text: str) -> tuple[List, List, str]:
-        markers = []
-        pages = []
-        clean_text = ""
-        last_pos = 0
-
-        for match in re.finditer(r'\[/(table|formula|figure)\]\[\d+\]\[/\1\]', text):
-            start, end = match.span()
-            markers.append((match.group(), start))
-            clean_text += text[last_pos:start]
-            last_pos = end
-
-        remaining_text = text[last_pos:]
-        last_pos = 0
-        final_clean = ""
-
-        for match in re.finditer(r'\[PAGE\]\[\d+\]\[PAGE\]', remaining_text):
-            start, end = match.span()
-            pages.append((match.group(), start))
-            final_clean += remaining_text[last_pos:start]
-            last_pos = end
-
-        final_clean += remaining_text[last_pos:]
-        return markers, pages, clean_text + final_clean
-
-    def _reconstruct_chunks(self, chunks: List[str], markers: List, pages: List, orig_length: int) -> List[LangChainDocument]:
-        reconstructed = []
-        current_pos = 0
-
-        for chunk in chunks:
-            chunk_start = current_pos
-            chunk_end = current_pos + len(chunk)
-            new_chunk = chunk
-
-            while markers and markers[0][1] < chunk_end:
-                marker, pos = markers.pop(0)
-                rel_pos = pos - chunk_start
-                new_chunk = new_chunk[:rel_pos] + marker + new_chunk[rel_pos:]
-                chunk_end += len(marker)
-
-            while pages and pages[0][1] < chunk_end:
-                page, pos = pages.pop(0)
-                rel_pos = pos - chunk_start
-                new_chunk = new_chunk[:rel_pos] + page + new_chunk[rel_pos:]
-                chunk_end += len(page)
-
-            reconstructed.append(new_chunk)
-            current_pos += len(chunk)
-
-        return [LangChainDocument(page_content=chunk) for chunk in reconstructed + [m[0] for m in markers] + [p[0] for p in pages]]

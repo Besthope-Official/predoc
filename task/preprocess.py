@@ -31,7 +31,7 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
         processor = PDFProcessor(
             output_dir=temp_dir,
             parse_method="auto",
-            chunk_strategy="semantic",
+            chunk_strategy="semantic_api",
             upload_to_oss=True
         )
         parsed_text = f"{file_name_without_extension}/text.txt"
@@ -72,12 +72,12 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
         logger.error(f"预处理任务 {task.task_id} 出错: {e}")
         if temp_dir.exists():
             shutil.rmtree(temp_dir)
-            prefix = Path(task.document.fileName).stem
-            clear_directory(
-                prefix=prefix,
-                bucket_name=OSSConfig.minio_bucket,
-                recursive=True
-            )
+            # prefix = Path(task.document.fileName).stem
+            # clear_directory(
+            #     prefix=prefix,
+            #     bucket_name=OSSConfig.minio_bucket,
+            #     recursive=True
+            # )
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
         raise
 

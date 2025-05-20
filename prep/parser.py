@@ -14,6 +14,8 @@ import cv2
 
 from config.backend import OSSConfig
 from task.oss import upload_file
+from config.model import CONFIG
+from .utils import clean_text
 
 
 class Parser:
@@ -21,18 +23,29 @@ class Parser:
         self.model = self._load_yolo_model()
 
     def _load_yolo_model(self):
-        filepath = hf_hub_download(
-            repo_id="juliozhao/DocLayout-YOLO-DocStructBench",
-            filename="./doclayout_yolo_docstructbench_imgsz1024.pt"
-        )
-        return YOLOv10(filepath)
+        local_model_path = os.path.join(
+            CONFIG.YOLO_MODEL_DIR, CONFIG.YOLO_MODEL_FILENAME)
 
-    @staticmethod
-    def clean_text(text: str) -> str:
-        if not text:
-            return ""
-        text = re.sub(r'[\x00-\x1F\x7F-\x9F\u200b-\u200d\uFEFF]', '', text)
-        return text.strip()
+        try:
+            if os.path.exists(local_model_path) and os.access(local_model_path, os.R_OK):
+                logger.info(f"从本地路径加载 YOLOv10 模型: {local_model_path}")
+                return YOLOv10(local_model_path)
+            else:
+                logger.warning(
+                    f"本地模型文件 {local_model_path} 不存在或无读权限，尝试从 Hugging Face 下载")
+        except Exception as e:
+            logger.error(f"检查本地模型文件失败: {e}")
+
+        try:
+            filepath = hf_hub_download(
+                repo_id=CONFIG.YOLO_HF_REPO_ID,
+                filename=CONFIG.YOLO_MODEL_FILENAME
+            )
+            logger.info(f"从 Hugging Face 下载 YOLOv10 模型: {filepath}")
+            return YOLOv10(filepath)
+        except Exception as e:
+            logger.error(f"从 Hugging Face 下载模型失败: {e}")
+            raise RuntimeError(f"无法加载 YOLOv10 模型: 本地和 Hugging Face 均失败")
 
     @staticmethod
     def check_file_access(file_path: str) -> None:
@@ -205,7 +218,7 @@ class Parser:
             upload_to_oss=upload_to_oss
         )
 
-        return parsed_text
+        return clean_text(parsed_text)
 
     def _get_element_type(self, cls: int) -> Optional[str]:
         if cls == 2:

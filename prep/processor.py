@@ -4,15 +4,15 @@ import numpy as np
 from loguru import logger
 
 from config.model import ModelConfig
+from config.api import ChunkAPIConfig
 from .model import generate_embeddings, init_model
-from .chunker import Chunker
+from .chunker import LLMChunker
 from .parser import Parser
 
 from .error import ParseResultEmptyException
 
 parser = Parser()
-chunker = Chunker(model_name='qwen3:4b')
-
+chunker = LLMChunker()
 
 class Processor:
     """数据预处理接口，需实现 parse 和 chunk 方法"""
@@ -86,7 +86,7 @@ class Processor:
 class PDFProcessor(Processor):
     """PDF文档处理类"""
 
-    def __init__(self, output_dir=ModelConfig.CHUNK_OUTPUT_DIR, parse_method="auto", chunk_strategy="semantic_ollama", upload_to_oss=True):
+    def __init__(self, output_dir=ModelConfig.CHUNK_OUTPUT_DIR, parse_method="auto", chunk_strategy="semantic_api", upload_to_oss=True):
         super().__init__(output_dir, parse_method, chunk_strategy, upload_to_oss)
 
     def parse(self, file_path: str) -> str:
@@ -103,5 +103,4 @@ class PDFProcessor(Processor):
         """将文本分成语义块"""
         if not text.strip():
             return []
-        doc_list = chunker.split_text(text, self.chunk_strategy)
-        return [doc.page_content for doc in doc_list]
+        return chunker.chunk(text)

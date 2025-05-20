@@ -43,7 +43,7 @@ class TaskConsumer:
     def _connect(self) -> None:
         if self.connection and not self.connection.is_closed:
             return
-        logger.info(f"Connecting to RabbitMQ Server: {self.config.host}...")
+        logger.info(f"Connecting to RabbitMQ Server: {self.config.host}:{self.config.port}")
 
         self.connection = pika.BlockingConnection(self.parameters)
         self.channel = self.connection.channel()
@@ -52,7 +52,7 @@ class TaskConsumer:
         self.channel.queue_declare(queue=self.queue_name, durable=True)
         self.channel.queue_declare(queue=self.result_queue_name, durable=True)
         logger.info(
-            f"已连接到RabbitMQ，任务队列: {self.queue_name}，结果队列: {self.result_queue_name}")
+            f"Connected! 任务队列: {self.queue_name}，结果队列: {self.result_queue_name}")
 
     def callback(self,
                  ch: pika.channel.Channel,

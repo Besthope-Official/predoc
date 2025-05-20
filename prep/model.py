@@ -3,6 +3,7 @@
 支持固定预训练模型的初始化和嵌入生成，优化内存使用并与 CONFIG 保持一致。
 """
 
+import os
 import torch
 import numpy as np
 from tqdm import tqdm
@@ -16,15 +17,29 @@ from loguru import logger
 
 
 @lru_cache(maxsize=8)
-def load_model_from_hf(hf_name: str, device: str) -> tuple:
-    """缓存加载 Hugging Face 模型和 tokenizer。"""
+def load_model_from_local_or_hf(model_name: str, device: str, local_dir: str, hf_repo_id: str) -> tuple:
+    """从本地路径或Hugging Face加载模型和tokenizer，支持缓存。"""
+    local_model_path = os.path.join(local_dir, model_name)
+
     try:
-        tokenizer = AutoTokenizer.from_pretrained(hf_name)
-        model = AutoModel.from_pretrained(hf_name).to(device)
+        if os.path.exists(local_model_path) and os.access(local_model_path, os.R_OK):
+            logger.info(f"从本地路径加载嵌入模型: {local_model_path}")
+            tokenizer = AutoTokenizer.from_pretrained(local_model_path)
+            model = AutoModel.from_pretrained(local_model_path).to(device)
+            return tokenizer, model
+        else:
+            logger.warning(
+                f"本地模型目录 {local_model_path} 不存在或无读权限，尝试从 Hugging Face 下载")
+    except Exception as e:
+        logger.error(f"加载本地嵌入模型失败: {e}")
+    try:
+        logger.info(f"从 Hugging Face 下载嵌入模型: {hf_repo_id}")
+        tokenizer = AutoTokenizer.from_pretrained(hf_repo_id)
+        model = AutoModel.from_pretrained(hf_repo_id).to(device)
         return tokenizer, model
     except Exception as e:
-        logger.error(f"加载 HF 模型 {hf_name} 失败: {e}")
-        raise
+        logger.error(f"从 Hugging Face 下载模型失败: {e}")
+        raise RuntimeError(f"无法加载嵌入模型: 本地和 Hugging Face 均失败")
 
 
 def init_model() -> Dict:
@@ -37,8 +52,8 @@ def init_model() -> Dict:
         ValueError: 如果模型加载失败。
     """
     config = {
-        "name": "paraphrase-multilingual-mpnet-base-v2",
-        "hf_name": "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+        "name": CONFIG.EMBEDDING_MODEL_NAME,
+        "hf_name": CONFIG.EMBEDDING_HF_REPO_ID,
         "type": "st",
         "normalize": True,
         "metric": "INNER_PRODUCT",
@@ -46,16 +61,30 @@ def init_model() -> Dict:
     }
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    if config["hf_name"] != CONFIG.EMBEDDING_MODEL:
-        logger.warning(
-            f"模型 {config['hf_name']} 与 CONFIG.EMBEDDING_MODEL {CONFIG.EMBEDDING_MODEL} 不一致，使用固定模型")
-
     try:
         if config["type"] == "hf":
-            tokenizer, model = load_model_from_hf(config["hf_name"], device)
+            tokenizer, model = load_model_from_local_or_hf(
+                config["name"], device, CONFIG.EMBEDDING_MODEL_DIR, CONFIG.EMBEDDING_HF_REPO_ID
+            )
         elif config["type"] == "st":
-            model = SentenceTransformer(config["hf_name"], device=device.type)
-            tokenizer = None
+            local_model_path = os.path.join(
+                CONFIG.EMBEDDING_MODEL_DIR, CONFIG.EMBEDDING_MODEL_NAME)
+            try:
+                if os.path.exists(local_model_path) and os.access(local_model_path, os.R_OK):
+                    logger.info(
+                        f"从本地路径加载 SentenceTransformer 模型: {local_model_path}")
+                    model = SentenceTransformer(
+                        local_model_path, device=device.type)
+                else:
+                    logger.warning(
+                        f"本地模型目录 {local_model_path} 不存在或无读权限，尝试从 Hugging Face 下载")
+                    model = SentenceTransformer(
+                        CONFIG.EMBEDDING_HF_REPO_ID, device=device.type)
+                tokenizer = None
+            except Exception as e:
+                logger.error(f"加载 SentenceTransformer 模型失败: {e}")
+                raise RuntimeError(
+                    f"无法加载 SentenceTransformer 模型: 本地和 Hugging Face 均失败")
         else:
             raise ValueError(f"未知模型类型: {config['type']}")
         logger.info(f"成功加载模型: {config['name']} 到 {device}")

@@ -147,7 +147,6 @@ def _store_embedding(
         for i in range(len(embedding)):
             current_page = re.findall(pattern, chunk_text[i])
             if current_page:
-                # 如果有匹配的页码，取最后一个页码
                 page = int(current_page[-1])
                 chunk_text[i] = re.sub(pattern, "", chunk_text[i])
             tmp = {
@@ -157,7 +156,6 @@ def _store_embedding(
                 "page": page
             }
             data.append(tmp)
-
         
         client.insert(
             collection_name=collection_name,
