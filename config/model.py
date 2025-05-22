@@ -1,4 +1,5 @@
 import os
+import torch
 from dataclasses import dataclass, field
 from typing import List, Dict
 from loguru import logger
@@ -8,6 +9,7 @@ os.environ['TOKENIZERS_PARALLELISM'] = "true"
 
 @dataclass
 class ModelConfig:
+    DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
     CHUNK_OUTPUT_DIR: str = os.getenv("CHUNK_OUTPUT_DIR", "./output/chunks")
     CHUNKS_FILE: str = field(
         default_factory=lambda: os.getenv("CHUNKS_FILE", ""))
@@ -29,7 +31,7 @@ class ModelConfig:
         "EMBEDDING_MODEL_NAME", "paraphrase-multilingual-mpnet-base-v2")
     EMBEDDING_HF_REPO_ID: str = os.getenv(
         "EMBEDDING_HF_REPO_ID", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
-    
+
     YOLO_MODEL_DIR: str = os.getenv("YOLO_MODEL_DIR", "./models/YOLOv10")
     YOLO_MODEL_FILENAME: str = os.getenv(
         "YOLO_MODEL_FILENAME", "doclayout_yolo_docstructbench_imgsz1024.pt")

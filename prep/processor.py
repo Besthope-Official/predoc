@@ -1,26 +1,26 @@
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from typing import Tuple
 import numpy as np
 from loguru import logger
 
 from config.model import ModelConfig
 from config.api import ChunkAPIConfig
-from .model import generate_embeddings, init_model
 from .chunker import LLMChunker
 from .parser import Parser
+from .embedding import EmbeddingModel
 
 from .error import ParseResultEmptyException
 
 parser = Parser()
 chunker = LLMChunker()
 
-class Processor:
-    """数据预处理接口，需实现 parse 和 chunk 方法"""
+
+class Processor(ABC):
     BASE_EMBD_MODEL = ModelConfig.EMBEDDING_MODEL
 
     def __init__(self, output_dir=ModelConfig.CHUNK_OUTPUT_DIR,
                  parse_method="auto",
-                 chunk_strategy="semantic_ollama",
+                 chunk_strategy="semantic_api",
                  upload_to_oss=True):
         self.output_dir = output_dir
         self.parse_method = parse_method.lower()
@@ -40,19 +40,13 @@ class Processor:
 
     def embedding(self, text: str, embd_model: str = BASE_EMBD_MODEL) -> list[float]:
         """对单文本嵌入"""
-        from sentence_transformers import SentenceTransformer
-        try:
-            model = SentenceTransformer(embd_model)
-        except Exception as e:
-            logger.warning(f"指定模型 {embd_model} 不存在, 回退到默认模型: {str(e)}")
-            model = SentenceTransformer(self.BASE_EMBD_MODEL)
-
-        embedding = model.encode(text).tolist()
-        return embedding
+        model = EmbeddingModel()
+        embedding = model.generate_embedding(text)
+        return embedding.tolist()
 
     def embeddings(self, chunks: list[str]) -> np.ndarray:
-        embd_model_info = init_model()
-        embeddings = generate_embeddings(embd_model_info, chunks)
+        model = EmbeddingModel()
+        embeddings = model.generate_embeddings(chunks)
         return embeddings
 
     @staticmethod

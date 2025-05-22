@@ -8,44 +8,17 @@ import fitz
 from loguru import logger
 from PIL import Image
 import pytesseract
-from huggingface_hub import hf_hub_download
-from doclayout_yolo import YOLOv10
 import cv2
 
 from config.backend import OSSConfig
 from task.oss import upload_file
-from config.model import CONFIG
 from .utils import clean_text
+from .model import init_model
 
 
 class Parser:
     def __init__(self):
-        self.model = self._load_yolo_model()
-
-    def _load_yolo_model(self):
-        local_model_path = os.path.join(
-            CONFIG.YOLO_MODEL_DIR, CONFIG.YOLO_MODEL_FILENAME)
-
-        try:
-            if os.path.exists(local_model_path) and os.access(local_model_path, os.R_OK):
-                logger.info(f"从本地路径加载 YOLOv10 模型: {local_model_path}")
-                return YOLOv10(local_model_path)
-            else:
-                logger.warning(
-                    f"本地模型文件 {local_model_path} 不存在或无读权限，尝试从 Hugging Face 下载")
-        except Exception as e:
-            logger.error(f"检查本地模型文件失败: {e}")
-
-        try:
-            filepath = hf_hub_download(
-                repo_id=CONFIG.YOLO_HF_REPO_ID,
-                filename=CONFIG.YOLO_MODEL_FILENAME
-            )
-            logger.info(f"从 Hugging Face 下载 YOLOv10 模型: {filepath}")
-            return YOLOv10(filepath)
-        except Exception as e:
-            logger.error(f"从 Hugging Face 下载模型失败: {e}")
-            raise RuntimeError(f"无法加载 YOLOv10 模型: 本地和 Hugging Face 均失败")
+        self.model = init_model('yolo')
 
     @staticmethod
     def check_file_access(file_path: str) -> None:
