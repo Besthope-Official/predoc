@@ -8,31 +8,17 @@ import fitz
 from loguru import logger
 from PIL import Image
 import pytesseract
-from huggingface_hub import hf_hub_download
-from doclayout_yolo import YOLOv10
 import cv2
 
 from config.backend import OSSConfig
 from task.oss import upload_file
+from .utils import clean_text
+from .model import init_model
 
 
 class Parser:
     def __init__(self):
-        self.model = self._load_yolo_model()
-
-    def _load_yolo_model(self):
-        filepath = hf_hub_download(
-            repo_id="juliozhao/DocLayout-YOLO-DocStructBench",
-            filename="./doclayout_yolo_docstructbench_imgsz1024.pt"
-        )
-        return YOLOv10(filepath)
-
-    @staticmethod
-    def clean_text(text: str) -> str:
-        if not text:
-            return ""
-        text = re.sub(r'[\x00-\x1F\x7F-\x9F\u200b-\u200d\uFEFF]', '', text)
-        return text.strip()
+        self.model = init_model('yolo')
 
     @staticmethod
     def check_file_access(file_path: str) -> None:
@@ -205,7 +191,7 @@ class Parser:
             upload_to_oss=upload_to_oss
         )
 
-        return parsed_text
+        return clean_text(parsed_text)
 
     def _get_element_type(self, cls: int) -> Optional[str]:
         if cls == 2:

@@ -1,10 +1,7 @@
 '''后端项目的配置文件'''
 from dataclasses import dataclass
 import os
-from dotenv import load_dotenv
-
-load_dotenv()
-env = os.getenv('ENV', 'dev')
+from . import env
 
 
 @dataclass
