@@ -5,6 +5,9 @@ from loguru import logger
 
 from config.backend import OSSConfig
 from prep.processor import PDFProcessor
+from prep.chunker import LLMChunker
+from prep.parser import YoloParser
+from prep.embedding import EmbeddingModel
 
 from task.oss import download_file, upload_file, clear_directory, check_file_exists
 from task.milvus import store_embedding_task
@@ -20,6 +23,7 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
     Args:
         use_cached: 是否使用已解析的文本，跳过解析步骤
     """
+    temp_dir = None
     try:
         temp_base_dir = Path(os.environ.get('TEMP', '/tmp'))
         temp_dir = temp_base_dir / f"task_{task.task_id}"
@@ -28,12 +32,6 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
         file_name_without_extension = Path(task.document.fileName).stem
         local_file_path = temp_dir / task.document.fileName
 
-        processor = PDFProcessor(
-            output_dir=temp_dir,
-            parse_method="auto",
-            chunk_strategy="semantic_api",
-            upload_to_oss=True
-        )
         parsed_text = f"{file_name_without_extension}/text.txt"
         if use_cached and check_file_exists(parsed_text):
             local_text_path = temp_dir / "text.txt"
@@ -47,8 +45,10 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             with open(local_text_path, "r", encoding="utf-8") as f:
                 text = f.read()
 
-            chunks = processor.chunk(text)
-            embeddings = processor.embeddings(chunks)
+            chunker = LLMChunker()
+            embedder = EmbeddingModel()
+            chunks = chunker.chunk(text)
+            embeddings = embedder.generate_embeddings(chunks)
         else:
             download_file(
                 object_name=task.document.fileName,
@@ -57,27 +57,30 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             logger.info(
                 f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}")
 
+            processor = PDFProcessor(
+                chunker=LLMChunker(),
+                parser=YoloParser(),
+                embedder=EmbeddingModel(),
+                output_dir=str(temp_dir),
+                upload_to_oss=True
+            )
+
             chunks, embeddings = processor.preprocess(
                 file_path=str(local_file_path),
-                warpper=False
+                wrapper=False
             )
 
             logger.info(
                 f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {temp_dir}")
 
+        if temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir)
             logger.info(f"临时目录 {temp_dir} 已清理")
 
     except Exception as e:
         logger.error(f"预处理任务 {task.task_id} 出错: {e}")
-        if temp_dir.exists():
+        if temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir)
-            # prefix = Path(task.document.fileName).stem
-            # clear_directory(
-            #     prefix=prefix,
-            #     bucket_name=OSSConfig.minio_bucket,
-            #     recursive=True
-            # )
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
         raise
 

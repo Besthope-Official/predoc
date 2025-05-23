@@ -210,38 +210,45 @@ class LLMChunker(Chunker):
         # 2. result_chunks <= 1,
         # 3. LLM-based chunk performance is bad,
         # rule-based chunker (create_sentence_chunks) will be used.
-        prompt = CHUNK_PROMPT_TEMPLATE.format(text=text)
+        prompt = CHUNK_PROMPT_TEMPLATE.format(text=text, text_length=len(text))
 
-        if self.backend == 'ollama':
-            response = self._call_ollama(
-                prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
-        elif self.backend == 'api':
-            response = self._call_open_api(
-                prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
+        try:
+            if self.backend == 'ollama':
+                response = self._call_ollama(
+                    prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
+            elif self.backend == 'api':
+                response = self._call_open_api(
+                    prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
 
-        # In case of using reasoning model
-        # It's not recommended to use reasoning model(e.g. Deepseek-R1) for chunking,
-        # as it requires more **TIME** and **TOKEN COST**
-        cleaned_text = self._remove_thinking(response)
-        
-        result_chunks = [chunk.strip() for chunk in cleaned_text.split(
-            "[CHUNK_BREAK]") if chunk.strip()]
+            # In case of using reasoning model
+            # It's not recommended to use reasoning model(e.g. Deepseek-R1) for chunking,
+            # as it requires more **TIME** and **TOKEN COST**
+            cleaned_text = self._remove_thinking(response)
+            
+            result_chunks = [chunk.strip() for chunk in cleaned_text.split(
+                "[CHUNK_BREAK]") if chunk.strip()]
 
-        if len(result_chunks) <= 1:
-            logger.warning("LLM只生成了一个块或返回空结果，使用备选分块方法")
+            if len(result_chunks) <= 1:
+                logger.warning("LLM只生成了一个块或返回空结果，使用备选分块方法")
+                return self.create_sentence_chunks(text)
+
+            # In case of LLM adds or removes some content unexpectedly
+            reconstructed_text = "".join([chunk.strip()
+                                         for chunk in result_chunks])
+            original_text = text.strip()
+            similarity_ratio = len(reconstructed_text) / \
+                len(original_text) if original_text else 0
+
+            # ratio of 0.95-1.05 is considered acceptable
+            # NO RETRY, use second choice for convenience
+            if similarity_ratio < 0.95 or similarity_ratio > 1.05:
+                logger.warning(
+                    f"分块内容与原文不匹配 (原文长度：{len(original_text)} 分块后：{len(reconstructed_text)} 相似度比例: {similarity_ratio:.4f})")
+                return self.create_sentence_chunks(text)
+            
+            logger.info(f"LLM成功生成 {len(result_chunks)} 个语义块")
+            return result_chunks
+            
+        except Exception as e:
+            logger.error(f"LLM分块失败，使用备选方法: {e}")
             return self.create_sentence_chunks(text)
-
-        # In case of LLM adds or removes some content unexpectedly
-        reconstructed_text = "".join([chunk.strip()
-                                     for chunk in result_chunks])
-        original_text = text.strip()
-        similarity_ratio = len(reconstructed_text) / \
-            len(original_text) if original_text else 0
-
-        # ratio of 0.95-1.05 is considered acceptable
-        # NO RETRY, use second choice for convenience
-        if similarity_ratio < 0.95 or similarity_ratio > 1.05:
-            logger.warning(
-                f"分块内容与原文不匹配 (原文长度：{len(original_text)} 分块后：{len(reconstructed_text)} 相似度比例: {similarity_ratio:.4f})")
-            return self.create_sentence_chunks(text)
-        return result_chunks
