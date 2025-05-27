@@ -13,6 +13,7 @@ from doclayout_yolo import YOLOv10
 from huggingface_hub import hf_hub_download
 from config.model import CONFIG
 from loguru import logger
+import pathlib
 
 
 def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
@@ -21,8 +22,8 @@ def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
 
        Util for model load. If model exists (and accessible) on local path, use it, else download from HuggingFace.
     '''
-    local_model_path = os.path.join(local_dir, model_name)
-    return local_model_path \
+    local_model_path = pathlib.Path(os.path.join(local_dir, model_name))
+    return str(local_model_path) \
         if os.path.exists(local_model_path) \
         and os.access(local_model_path, os.R_OK) \
         else hf_repo_id
