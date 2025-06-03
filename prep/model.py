@@ -12,6 +12,7 @@ from doclayout_yolo import YOLOv10
 from huggingface_hub import hf_hub_download
 from config.model import CONFIG
 from loguru import logger
+import pathlib
 
 
 def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
