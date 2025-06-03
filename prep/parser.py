@@ -15,7 +15,7 @@ from config.backend import OSSConfig
 from task.oss import upload_file
 from .utils import clean_text
 from .model import init_model
-
+from config.model import CONFIG
 
 class Parser(ABC):
     """文档解析器基类"""
@@ -131,7 +131,7 @@ class YoloParser(Parser):
 
         cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         det_res = self.model.predict(
-            str(temp_img_path), imgsz=1024, conf=0.25, device="cuda:0")
+            str(temp_img_path), imgsz=1024, conf=0.25, device=CONFIG.DEVICE)
         results = det_res[0]
 
         text_blocks = []

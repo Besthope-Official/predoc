@@ -133,9 +133,5 @@ class PDFProcessor(Processor):
             enable_parallel_processing: 是否启用并行处理
             max_workers: 最大工作线程数
         """
-        if chunker is None:
-            chunker = LLMChunker()
-        if parser is None:
-            parser = YoloParser()
         super().__init__(chunker, parser, embedder, output_dir,
                          upload_to_oss, enable_parallel_processing, max_workers)

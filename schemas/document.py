@@ -1,7 +1,7 @@
 '''文档数据模型'''
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 
 class Author(BaseModel):
@@ -30,8 +30,8 @@ class Document(BaseModel):
     keywords: List[Keyword]
     fileName: str
     docType: str = Field(alias='doc_type')
-    publicationDate: datetime
-    language: str
+    publicationDate: Optional[datetime] = None
+    language: Optional[str] = "unknown"
 
 
 class JournalArticle(Document):

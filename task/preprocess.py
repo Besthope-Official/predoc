@@ -11,7 +11,7 @@ from prep.embedding import EmbeddingModel
 
 from task.oss import download_file, upload_file, clear_directory, check_file_exists
 from task.milvus import store_embedding_task
-from models import Task
+from schemas import Task
 
 
 def preprocess(task: Task, use_cached: bool = True) -> None:

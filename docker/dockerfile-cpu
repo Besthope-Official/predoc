@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1
+FROM continuumio/miniconda3:latest
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PATH=/opt/conda/envs/predoc/bin:$PATH
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    poppler-utils \
+    ghostscript \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-chi-sim \
+    libgl1-mesa-glx \
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Create conda environment
+RUN conda create -n predoc python=3.10 -y && \
+    conda clean -afy
+
+# Set up conda environment
+SHELL ["conda", "run", "-n", "predoc", "/bin/bash", "-c"]
+
+WORKDIR /app
+COPY . /app/
+
+RUN pip config set global.index-url https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+# Install Python dependencies
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --index-url https://download.pytorch.org/whl/cpu torch torchvision torchaudio && \
+    pip install -r requirements.txt
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=30s --timeout=30s --start-period=5s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+CMD ["python", "run.py"]
+
+# DOCKER_BUILDKIT=1 docker build -t predoc:cpu -f dockerfile-cpu .

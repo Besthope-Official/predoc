@@ -5,6 +5,7 @@ from typing import List, Dict
 from loguru import logger
 
 os.environ['TOKENIZERS_PARALLELISM'] = "true"
+os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 
 @dataclass
@@ -37,15 +38,6 @@ class ModelConfig:
         "YOLO_MODEL_FILENAME", "doclayout_yolo_docstructbench_imgsz1024.pt")
     YOLO_HF_REPO_ID: str = os.getenv(
         "YOLO_HF_REPO_ID", "juliozhao/DocLayout-YOLO-DocStructBench")
-    VLLM_API_KEY: str = os.getenv("VLLM_API_KEY", "default_key")
-    VLLM_API_BASE_GEMMA: str = os.getenv(
-        "VLLM_API_BASE_GEMMA", "http://127.0.0.1:8000/v1")
-    VLLM_API_BASE_QWEN: str = os.getenv(
-        "VLLM_API_BASE_QWEN", "http://127.0.0.1:8001/v1")
-    VLLM_MODELS: Dict[str, str] = field(default_factory=lambda: {
-        "gemma-2-27b-it": "./models/gemma-2-27b-it",
-        "QwQ-32B": "./models/QwQ-32B"
-    })
 
     def validate_path(self, path: str, needs_write: bool = True) -> str:
         dir_path = os.path.dirname(path) or path

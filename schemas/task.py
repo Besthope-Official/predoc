@@ -5,7 +5,6 @@ from enum import Enum
 from uuid import UUID
 from datetime import datetime
 import json
-from loguru import logger
 
 from .document import Document
 
@@ -39,7 +38,6 @@ class Task(BaseModel):
     @classmethod
     def from_json(cls, json_str):
         data = json.loads(json_str)
-        logger.debug(f'Receiving JSON: {data}')
         if "status" in data and isinstance(data["status"], str):
             try:
                 data["status"] = TaskStatus(data["status"])
@@ -57,9 +55,11 @@ class Task(BaseModel):
             "dateTime": None
         }
         if self.status == TaskStatus.PROCESSING:
-            data['dateTime'] = self.processed_at.isoformat() if self.processed_at else None
+            data['dateTime'] = self.processed_at.isoformat(
+            ) if self.processed_at else None
         elif self.status == TaskStatus.DONE or self.status == TaskStatus.FAILED:
-            data['dateTime'] = self.finished_at.isoformat() if self.finished_at else None
+            data['dateTime'] = self.finished_at.isoformat(
+            ) if self.finished_at else None
         return json.dumps(data)
 
     def to_metadata(self):
@@ -68,7 +68,7 @@ class Task(BaseModel):
             "authors": [author.to_dict() for author in self.document.authors],
             "keywords": [keyword.to_dict() for keyword in self.document.keywords],
             "title": self.document.title,
-            "publicationDate": str(self.document.publicationDate.isoformat()),
+            "publicationDate": self.document.publicationDate.isoformat() if self.document.publicationDate else None,
             "language": self.document.language
         }
         return metadata
