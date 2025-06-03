@@ -7,7 +7,7 @@ from loguru import logger
 
 from config.backend import RabbitMQConfig
 from task.preprocess import preprocess
-from models import TaskStatus, Task
+from schemas import TaskStatus, Task
 
 
 class TaskConsumer:
@@ -30,7 +30,7 @@ class TaskConsumer:
             credentials=self.credentials,
             heartbeat=600
         )
-        
+
         self.queue_name = queue_name
         self.result_queue_name = result_queue_name
         self.connection: Optional[pika.BlockingConnection] = None
@@ -43,7 +43,8 @@ class TaskConsumer:
     def _connect(self) -> None:
         if self.connection and not self.connection.is_closed:
             return
-        logger.info(f"Connecting to RabbitMQ Server: {self.config.host}:{self.config.port}")
+        logger.info(
+            f"Connecting to RabbitMQ Server: {self.config.host}:{self.config.port}")
 
         self.connection = pika.BlockingConnection(self.parameters)
         self.channel = self.connection.channel()

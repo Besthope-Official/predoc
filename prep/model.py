@@ -4,7 +4,6 @@
 """
 
 import os
-import torch
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
 from typing import Dict, Tuple
@@ -18,53 +17,85 @@ import pathlib
 
 def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
     '''
-       Returns model repo on HuggingFace or local path.
-
-       Util for model load. If model exists (and accessible) on local path, use it, else download from HuggingFace.
+    Returns local path for model. If model doesn't exist locally, downloads it from HuggingFace
+    and saves to specified local directory.
     '''
-    local_model_path = pathlib.Path(os.path.join(local_dir, model_name))
-    return str(local_model_path) \
-        if os.path.exists(local_model_path) \
-        and os.access(local_model_path, os.R_OK) \
-        else hf_repo_id
+    local_model_path = os.path.join(local_dir, model_name)
+
+    if os.path.exists(local_model_path) and os.access(local_model_path, os.R_OK):
+        logger.info(f"Using local model from: {local_model_path}")
+        return local_model_path
+
+    os.makedirs(local_dir, exist_ok=True)
+
+    logger.info(f"Downloading model from {hf_repo_id} to {local_model_path}")
+    try:
+        # Specific for YOLO model
+        if isinstance(model_name, str) and model_name.endswith('.pt'):
+            filepath = hf_hub_download(
+                repo_id=hf_repo_id,
+                filename=model_name,
+                local_dir=local_dir,
+                local_dir_use_symlinks=False
+            )
+            return filepath
+
+        return hf_repo_id
+    except Exception as e:
+        raise RuntimeError(
+            f"Failed to download model from {hf_repo_id}: {str(e)}")
 
 
 @lru_cache(maxsize=8)
 def _load_tokenizer_and_model(model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE) -> Tuple[AutoTokenizer, AutoModel]:
     '''
-        Load AutoTokenizer and AutoModel.
+    Load AutoTokenizer and AutoModel. Downloads and saves to local_dir if not present.
     '''
     model_name_or_path = _model_or_path(model_name, local_dir, hf_repo_id)
-    tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
-    model = AutoModel.from_pretrained(model_name_or_path).to(device)
+    local_model_path = os.path.join(local_dir, model_name)
 
-    return tokenizer, model
+    if model_name_or_path == hf_repo_id:
+        logger.info(f"Downloading model to {local_model_path}")
+        tokenizer = AutoTokenizer.from_pretrained(hf_repo_id)
+        model = AutoModel.from_pretrained(hf_repo_id)
+
+        tokenizer.save_pretrained(local_model_path)
+        model.save_pretrained(local_model_path)
+        logger.info(f"Model saved to {local_model_path}")
+    else:
+        tokenizer = AutoTokenizer.from_pretrained(local_model_path)
+        model = AutoModel.from_pretrained(local_model_path)
+
+    return tokenizer, model.to(device)
 
 
 @lru_cache(maxsize=8)
 def _load_sentence_transformer(model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE) -> SentenceTransformer:
     '''
-        Load SentenceTransformer model.
+    Load SentenceTransformer model. Downloads and saves to local_dir if not present.
     '''
     model_name_or_path = _model_or_path(model_name, local_dir, hf_repo_id)
-    model = SentenceTransformer(
-        model_name_or_path, device=device)
+    local_model_path = os.path.join(local_dir, model_name)
+
+    if model_name_or_path == hf_repo_id:
+        logger.info(f"Downloading model to {local_model_path}")
+        model = SentenceTransformer(hf_repo_id, device=device)
+        model.save(local_model_path)
+        logger.info(f"Model saved to {local_model_path}")
+    else:
+        model = SentenceTransformer(local_model_path, device=device)
 
     return model
 
 
 @lru_cache(maxsize=8)
 def _load_yolo_model(model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE):
-    model_name_or_path = _model_or_path(model_name, local_dir, hf_repo_id)
-    if model_name_or_path == hf_repo_id:
-        filepath = hf_hub_download(
-            repo_id=CONFIG.YOLO_HF_REPO_ID,
-            filename=CONFIG.YOLO_MODEL_FILENAME
-        )
-        logger.info(f"从 Hugging Face 下载 YOLOv10 模型: {filepath}")
-        model_name_or_path = filepath
-    model = YOLOv10(model_name_or_path)
-
+    '''
+    Load YOLOv10 model. Downloads and saves to local_dir if not present.
+    '''
+    model_path = _model_or_path(model_name, local_dir, hf_repo_id)
+    logger.info(f"Loading YOLO model from: {model_path}")
+    model = YOLOv10(model_path)
     return model
 
 

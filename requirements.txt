@@ -3,6 +3,7 @@ huggingface_hub==0.30.2
 doclayout_yolo==0.0.3
 sentence_transformers==4.1.0
 transformers==4.51.3
+openai==1.82.0
 # PDF parsing
 # replacing fitz
 pymupdf==1.25.5

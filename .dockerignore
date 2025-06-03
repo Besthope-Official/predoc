@@ -1,0 +1,64 @@
+# Version control
+.git/
+.gitignore
+.cursor/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env
+.venv
+env/
+venv/
+ENV/
+*.egg-info/
+dist/
+build/
+eggs/
+*.egg
+
+# Development and test files
+tests/
+test_*.py
+example_*.txt
+chunk_text.txt
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Output and temporary files
+output/
+*.log
+*.tmp
+*.temp
+.DS_Store
+
+# Local development configurations
+.env*
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Project specific
+AI预实验文献/
+examples/
+query/
+
+# Documentation
+*.md
+!README.md
+!docker/README.md
+docs/
+
+# Docker
+docker/*
+!docker/dockerfile*
+!docker/README.md
+
+# Models
+models/embedding/
+models/YOLOv10/

@@ -4,7 +4,7 @@ Preprocess document service for RAG (Retriveal Augumented Generation)
 
 ## Usage
 
-### Env setup
+### Dev Env setup
 
 We recommend you use `conda` to isolate RAG environment, then install dependencies via `pip`:
 
@@ -27,33 +27,31 @@ apt-get update && apt-get install -y --no-install-recommends \
     tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim libgl1-mesa-glx \
 ```
 
-Currently, we use Ollama for local LLM inference, see [doc](https://ollama.com/download/windows) for installation guide:
+For LLMChunker, you can use `ollama`(set it as default backend) to run the model locally, see [doc](https://ollama.com/docs/quickstart) for installation guide.
 
-```bash
-curl -fsSL https://ollama.com/install.sh | sh
+```python
+from prep.chunker import LLMChunker
+
+chunker = LLMChunker(
+    backend='ollama',
+    ollama_api_host='http://127.0.0.1:11434',
+    model_name='qwen3:4b'
+)
 ```
 
-```bash
-# we use gemma2:27b as default model
-ollama run gemma2:27b
-```
-
-Run the service
-
-```bash
-python run.py
-```
+You can also use `api` backend to use any OpenAI-compatible API, e.g. you can use vLLM to deploy a model on your own server.
 
 ### Install from Docker
 
-```bash
-docker build -t predoc:latest .
-docker run --name predoc -d --gpus=all predoc:latest
-```
+We provide CPU/GPU Docker images to suit different deployment needs. See [Docker Build Guide](docker/README.md) for detailed documentation.
+
+We suggest you use CPU version as it not only provides smaller image size but also almost same performance (yolo-parsing and embedding will not be bottleneck).
 
 ## Getting started
 
 1. Use API as a tool
+
+check `/docs` for API documentation.
 
 2. Use RabbitMQ as a task consumer
 
@@ -62,3 +60,8 @@ docker run --name predoc -d --gpus=all predoc:latest
 - YOLO image recognition for PDF parsing
 - LLM for text chunking, rule-based chunking(semantic)
 - use `paraphrase-multilingual-mpnet-base-v2` as embedding model
+
+## TODOs
+
+- paddleocr support
+- 

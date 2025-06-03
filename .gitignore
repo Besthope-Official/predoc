@@ -173,7 +173,15 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Cursor
+/.cursor
+.cursorrules
+
 # Output file
 /output
 /AI预实验文献
 /examples
+
+# Models
+models/embedding/
+models/YOLOv10/

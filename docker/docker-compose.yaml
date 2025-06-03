@@ -1,0 +1,13 @@
+version: '3'
+services:
+  predoc:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./models:/app/models
+    environment:
+      - EMBEDDING_MODEL_DIR=/app/models/embedding
+      - YOLO_MODEL_DIR=/app/models/YOLOv10
