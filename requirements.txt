@@ -1,5 +1,5 @@
 # Models
-huggingface_hub==0.30.2
+huggingface_hub==0.32.4
 doclayout_yolo==0.0.3
 sentence_transformers==4.1.0
 transformers==4.51.3
@@ -25,3 +25,9 @@ fastapi==0.115.12
 uvicorn==0.34.2
 pymilvus==2.5.0
 python-multipart==0.0.20
+
+# testing dependencies
+pytest==8.3.3
+pytest-asyncio
+pytest-benchmark==5.1.0
+psutil==7.0.0
