@@ -1,0 +1,26 @@
+[
+    {
+        "id": 457879888138624081,
+        "distance": 0.7476378083229065,
+        "entity": {
+            "chunk": "In our data we do observe that males play less cooperatively and females play more cooperatively in front of their peers.",
+            "metadata": "{\"authors\": [{\"name\": \"Gary Charness\", \"institution\": \"Department of Economics, University of California at Santa Barbara\"}, {\"name\": \"Aldo Rustichini\", \"institution\": \"Department of Economics, University of Minnesota\"}], \"keywords\": [{\"name\": \"Group membership\"}, {\"name\": \"Gender differences\"}, {\"name\": \"Cooperation\"}], \"title\": \"Gender differences in cooperation with group membership\", \"publicationDate\": \"2011-01-01T00:00:00\", \"language\": \"english\"}"
+        }
+    },
+    {
+        "id": 457879888138624026,
+        "distance": 0.732726514339447,
+        "entity": {
+            "chunk": "However, this similarity in average behavior is the result of a balancing of significant effects of the interaction of role and gender. If we look at behavior in similar situation of males and females, we find that males cooperate significantly less whenat home than do females (28.9% versus 45.8%, with Z = 2.67, p = 0.008). Males cooperate more when away than do females(42.1% versus 32.5%), but this difference is not statistically significant, with Z = 1.52, p = 0.129. The cooperation rate for[PAGE][4][PAGE]males is 13.2 percentage points higher when away t[/table][2][/table][/table][3][/table]han when at home (42.1% versus 28.",
+            "metadata": "{\"authors\": [{\"name\": \"Gary Charness\", \"institution\": \"Department of Economics, University of California at Santa Barbara\"}, {\"name\": \"Aldo Rustichini\", \"institution\": \"Department of Economics, University of Minnesota\"}], \"keywords\": [{\"name\": \"Group membership\"}, {\"name\": \"Gender differences\"}, {\"name\": \"Cooperation\"}], \"title\": \"Gender differences in cooperation with group membership\", \"publicationDate\": \"2011-01-01T00:00:00\", \"language\": \"english\"}"
+        }
+    },
+    {
+        "id": 457879888138624045,
+        "distance": 0.7243242859840393,
+        "entity": {
+            "chunk": "However, we do note that the overall rate of females choosing cooperation is higher when playing against males than against females.",
+            "metadata": "{\"authors\": [{\"name\": \"Gary Charness\", \"institution\": \"Department of Economics, University of California at Santa Barbara\"}, {\"name\": \"Aldo Rustichini\", \"institution\": \"Department of Economics, University of Minnesota\"}], \"keywords\": [{\"name\": \"Group membership\"}, {\"name\": \"Gender differences\"}, {\"name\": \"Cooperation\"}], \"title\": \"Gender differences in cooperation with group membership\", \"publicationDate\": \"2011-01-01T00:00:00\", \"language\": \"english\"}"
+        }
+    }
+]
