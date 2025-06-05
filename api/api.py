@@ -208,3 +208,12 @@ async def text_embedding(
     except Exception as e:
         logger.error(f"生成嵌入向量失败: {str(e)}")
         raise HTTPException(status_code=500, detail=f"嵌入生成错误: {str(e)}")
+
+
+@app.post("retrieval")
+async def document_retrieval(
+    query: str = Body(...),
+    topK: int = Body(5),
+) -> ApiResponse:
+    '''接收查询字符串，返回检索到的文档列表'''
+    pass
