@@ -3,9 +3,9 @@ import json
 import time
 import pytest
 
-from task.milvus import _get_milvus_client, search_embedding
+from task.milvus import _get_milvus_client
+from retrieve.search import retrieve_documents
 from loguru import logger
-from api.utils import ModelLoader
 
 QUESTION_JSON_DIR = Path(__file__).parent.parent / "AI预实验文献/questions.json"
 K = 50
@@ -15,20 +15,19 @@ en_hits, en_total = 0, 0
 query_times = []
 
 
-def retrieve_documents(query: str, k=K, strategy="direct"):
-    """Retrieve documents from Milvus using the query."""
+def timed_retrieve_documents(query: str, k=K, strategy="direct"):
     start_time = time.time()
-
-    if strategy == "direct":
-        embedder = ModelLoader().embedder
-        embd = embedder.generate_embedding(query)
-        results = search_embedding(embd, k)
-    else:
-        raise ValueError(f"Unsupported strategy: {strategy}")
-
+    metadatas = retrieve_documents(query, k, strategy)
     end_time = time.time()
+
     elapsed_time = end_time - start_time
     query_times.append(elapsed_time)
+
+    results = [
+        {
+            "title": metadata["metadata"]["title"]
+        } for metadata in metadatas
+    ]
 
     return results
 
@@ -87,19 +86,8 @@ class TestQueryMilvus:
             en_total = len(questions)
 
         for question in questions:
-            # Note:
-            # Milvus returns entities wrapped in a list, so need to desearilize like this
-            # see /examples/search_result.json
-            raw_results = retrieve_documents(
-                question["question"], strategy='direct')[0]
-            metadatas = [
-                {
-                    "metadata": json.loads(raw_result['entity']['metadata'])
-                } for raw_result in raw_results]
-            results = [
-                {
-                    "title": metadata["metadata"]["title"]
-                } for metadata in metadatas]
+            results = timed_retrieve_documents(
+                question["question"], strategy='direct')
             answer_title = question["source"]
 
             if hit_at_k(results, answer_title):
