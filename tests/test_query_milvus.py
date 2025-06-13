@@ -15,18 +15,19 @@ en_hits, en_total = 0, 0
 query_times = []
 
 
-def timed_retrieve_documents(query: str, k=K, strategy="direct"):
+def timed_retrieve_documents(query: str, k=K):
     start_time = time.time()
-    metadatas = retrieve_documents(query, k, strategy)
+    result = retrieve_documents(query, k)
     end_time = time.time()
 
     elapsed_time = end_time - start_time
     query_times.append(elapsed_time)
 
+    docs = result.get("docs", [])
     results = [
         {
-            "title": metadata["metadata"]["title"]
-        } for metadata in metadatas
+            "title": doc["title"]
+        } for doc in docs
     ]
 
     return results
@@ -87,7 +88,7 @@ class TestQueryMilvus:
 
         for question in questions:
             results = timed_retrieve_documents(
-                question["question"], strategy='direct')
+                question["question"], k=K)
             answer_title = question["source"]
 
             if hit_at_k(results, answer_title):

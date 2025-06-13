@@ -59,8 +59,9 @@ class EmbeddingModel:
             if self.model_type == "hf":
                 result = self._hf_generate_embeddings(texts, batch_size)
             else:
+                show_progress_bar = CONFIG.DEBUG
                 result = self.model.encode(
-                    texts, batch_size=batch_size, show_progress_bar=True,
+                    texts, batch_size=batch_size, show_progress_bar=show_progress_bar,
                     convert_to_numpy=True, normalize_embeddings=self.normalize, device=self.device
                 )
             if not isinstance(result, np.ndarray) or result.size == 0:

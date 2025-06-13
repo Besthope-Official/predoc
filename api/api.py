@@ -12,7 +12,6 @@ import threading
 from functools import lru_cache
 
 from prep.processor import PDFProcessor
-from retrieve.query import QueryOptimizer
 from retrieve.search import retrieve_documents
 from .utils import ModelLoader, api_success, api_fail, ApiResponse
 from task.task import TaskConsumer
@@ -219,19 +218,14 @@ async def document_retrieval(
 ) -> ApiResponse:
     '''接收查询字符串，返回检索到的文档列表'''
     try:
-        query_optimizer = QueryOptimizer()
-        
-        rephrased_query, strategy = query_optimizer.combined_query(query)
-        logger.info(f"使用 {strategy} 策略查询")
-        results = retrieve_documents(rephrased_query, k=topK)
+        results = retrieve_documents(query, k=topK)
         response_data = {
-            "doc": results["docs"], 
+            "doc": results["docs"],
             "chunks": results["chunks"]
         }
-        
-        # 返回成功响应
+
         return api_success(data=response_data)
-        
+
     except Exception as e:
         logger.error(f"文档检索失败: {str(e)}")
         return api_fail(data=None, message=f"文档检索错误: {str(e)}")
