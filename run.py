@@ -15,7 +15,7 @@ def main():
     logger.info(f"启动RAG API服务器于 {args.host}:{args.port}")
     logger.info(
         f"工作进程数: {args.workers}, 自动重载: {'启用' if args.reload else '禁用'}")
-    
+
     uvicorn.run(
         "api.api:app",
         host=args.host,

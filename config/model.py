@@ -10,6 +10,8 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 @dataclass
 class ModelConfig:
+    DEBUG: bool = field(
+        default_factory=lambda: os.getenv("DEBUG", "false").lower() == "true")
     DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
     CHUNK_OUTPUT_DIR: str = os.getenv("CHUNK_OUTPUT_DIR", "./output/chunks")
     CHUNKS_FILE: str = field(

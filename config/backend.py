@@ -21,11 +21,11 @@ class MilvusConfig:
         port: int = int(os.getenv('MILVUS_PORT', '19530'))
         user: str = os.getenv('MILVUS_USER', 'root')
         password: str = os.getenv('MILVUS_PASSWORD', 'Milvus')
-        db_name: str = os.getenv('TEST_MILVUS_DB', 'test')
+        db_name: str = os.getenv('TEST_MILVUS_DB', 'default')
         default_collection_name: str = os.getenv(
-            'TEST_MILVUS_DEFAULT_COLLECTION', 'test_collection')
+            'TEST_MILVUS_DEFAULT_COLLECTION', 'default_collection')
         default_partition_name: str = os.getenv(
-            'TEST_MILVUS_DEFAULT_PARTITION', 'test_partition')
+            'TEST_MILVUS_DEFAULT_PARTITION', 'default_partition')
     elif env == 'prod':
         host: str = os.getenv('MILVUS_HOST', '')
         port: int = int(os.getenv('MILVUS_PORT', '19530'))
