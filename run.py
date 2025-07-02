@@ -1,6 +1,7 @@
 import uvicorn
 import argparse
 from loguru import logger
+from config.app import Config
 
 
 def main():
@@ -15,6 +16,7 @@ def main():
     logger.info(f"启动RAG API服务器于 {args.host}:{args.port}")
     logger.info(
         f"工作进程数: {args.workers}, 自动重载: {'启用' if args.reload else '禁用'}")
+    logger.info(f"消息队列: {'启用' if Config.ENABLE_MASSAGE_QUEUE else '禁用'}")
 
     uvicorn.run(
         "api.api:app",

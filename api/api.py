@@ -16,6 +16,7 @@ from retrieve.search import retrieve_documents
 from .utils import ModelLoader, api_success, api_fail, ApiResponse
 from task.task import TaskConsumer
 from config.backend import RabbitMQConfig
+from config.app import Config
 
 
 @lru_cache()
@@ -47,14 +48,18 @@ async def lifespan(app: FastAPI):
     model_loader = get_model_loader()
     model_loader.preload_all()
 
-    logger.info("初始化任务消费者...")
-    consumer = get_task_consumer()
+    consumer_thread = None
+    if Config.ENABLE_MASSAGE_QUEUE:
+        logger.info("消息队列已启用，初始化任务消费者...")
+        consumer = get_task_consumer()
 
-    consumer_thread = threading.Thread(
-        target=lambda: start_task_consumer(consumer),
-        daemon=True
-    )
-    consumer_thread.start()
+        consumer_thread = threading.Thread(
+            target=lambda: start_task_consumer(consumer),
+            daemon=True
+        )
+        consumer_thread.start()
+    else:
+        logger.info("消息队列已禁用，跳过任务消费者初始化")
 
     yield
 

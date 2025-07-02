@@ -39,7 +39,7 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             download_file(
                 object_name=parsed_text,
                 file_path=local_text_path,
-                bucket_name=OSSConfig.minio_bucket
+                bucket_name=OSSConfig.preprocessed_files_bucket
             )
             logger.info(f"预解析文件 {parsed_text} 已从 OSS 下载到 {local_text_path}")
             with open(local_text_path, "r", encoding="utf-8") as f:
