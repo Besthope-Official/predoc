@@ -20,8 +20,8 @@ def generate_image_url(title: str, element_type: str, idx: int) -> str:
         图片的公开访问 URL
     """
     object_name = f"{title}/{element_type}_{idx}.png"
-    url = urljoin(f"http://{OSSConfig.minio_endpoint}",
-                  f"{OSSConfig.minio_bucket}/{object_name}")
+    url = urljoin(f"http://{OSSConfig.endpoint}",
+                  f"{OSSConfig.preprocessed_files_bucket}/{object_name}")
     return url
 
 

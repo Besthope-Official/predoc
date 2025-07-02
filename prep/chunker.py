@@ -132,7 +132,8 @@ class LLMChunker(Chunker):
             enable_parallelism: Use multi-threading for chunking. Defaults to `False`.
         '''
         super().__init__(enable_parallelism=enable_parallelism)
-        self.num_workers = min(self.num_workers, ChunkAPIConfig.MAX_QPS)
+        if enable_parallelism:
+            self.num_workers = min(self.num_workers, ChunkAPIConfig.MAX_QPS)
         self.model_name = model_name
         logger.debug(f"Using {self.model_name} as chunker LLM...")
         self.backend = backend

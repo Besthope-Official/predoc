@@ -20,16 +20,16 @@ def get_minio_client() -> Minio:
         return _minio_client
 
     config = OSSConfig()
-    secure = config.minio_endpoint.startswith("https://")
+    secure = config.endpoint.startswith("https://")
 
-    endpoint = config.minio_endpoint
+    endpoint = config.endpoint
     if "://" in endpoint:
         endpoint = endpoint.split("://", 1)[1]
 
     _minio_client = Minio(
         endpoint,
-        access_key=config.minio_access,
-        secret_key=config.minio_secret,
+        access_key=config.access,
+        secret_key=config.secret,
         secure=secure
     )
 
@@ -119,7 +119,7 @@ def download_file(
 
 def check_file_exists(
     object_name: str,
-    bucket_name: Optional[str] = OSSConfig.minio_bucket
+    bucket_name: Optional[str] = OSSConfig.preprocessed_files_bucket
 ) -> bool:
     """
     检查 OSS 中的文件是否存在

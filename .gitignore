@@ -179,6 +179,7 @@ cython_debug/
 
 # Output file
 /output
+/data
 /AI预实验文献
 /examples
 

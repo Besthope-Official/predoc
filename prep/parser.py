@@ -17,6 +17,7 @@ from .utils import clean_text
 from .model import init_model
 from config.model import CONFIG
 
+
 class Parser(ABC):
     """文档解析器基类"""
 
@@ -64,7 +65,7 @@ class Parser(ABC):
         upload_result = upload_file(
             file_path=Path(save_path),
             object_name=object_name,
-            bucket_name=OSSConfig.minio_bucket
+            bucket_name=OSSConfig.preprocessed_files_bucket
         )
         logger.debug(f"upload to {upload_result}")
 
