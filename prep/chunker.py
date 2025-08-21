@@ -1,4 +1,4 @@
-'''分块器'''
+"""分块器"""
 
 import re
 import requests
@@ -17,7 +17,7 @@ from .utils import TextSplitter, extract_markers, reconstruct_chunks
 
 
 class Chunker(ABC):
-    '''Base interface for chunker.'''
+    """Base interface for chunker."""
 
     def __init__(self, enable_parallelism: bool):
         self.enable_parallelism = enable_parallelism
@@ -41,8 +41,7 @@ class Chunker(ABC):
             return 1
 
     def _parallel_batch_processing(self, texts: List[str]) -> List[str]:
-        logger.debug(
-            f"Using {self.num_workers} workers for parallel processing.")
+        logger.debug(f"Using {self.num_workers} workers for parallel processing.")
         results = []
         with ThreadPoolExecutor(max_workers=self.num_workers) as executor:
             all_results = executor.map(self.split_text, texts)
@@ -69,8 +68,7 @@ class Chunker(ABC):
         else:
             logger.info("使用多线程分块...")
             all_chunks = self._parallel_batch_processing(sections)
-        text = reconstruct_chunks(
-            all_chunks, markers, pages, len(clean_text))
+        text = reconstruct_chunks(all_chunks, markers, pages, len(clean_text))
         return text
 
 
@@ -103,20 +101,21 @@ class SentenceChunker(Chunker):
 
 
 class LLMChunker(Chunker):
-    '''LLM-based Chunker. Similar to https://docs.chonkie.ai/python-sdk/chunkers/slumber-chunker, 
-       use a prompt template to chunk text into smaller pieces.
-       You can change API backend to use Ollama or any OpenAI-compatible LLM API.
-    '''
+    """LLM-based Chunker. Similar to https://docs.chonkie.ai/python-sdk/chunkers/slumber-chunker,
+    use a prompt template to chunk text into smaller pieces.
+    You can change API backend to use Ollama or any OpenAI-compatible LLM API.
+    """
 
-    def __init__(self,
-                 backend='api',
-                 ollama_api_host="http://127.0.0.1:11434",
-                 model_name=ChunkAPIConfig.MODEL_NAME,
-                 api_base=ChunkAPIConfig.API_URL,
-                 api_key=ChunkAPIConfig.API_KEY,
-                 enable_parallelism=Config.ENABLE_PARALLELISM,
-                 ):
-        '''Initialize the LLMChunker with specified backend and API configurations.
+    def __init__(
+        self,
+        backend="api",
+        ollama_api_host="http://127.0.0.1:11434",
+        model_name=ChunkAPIConfig.MODEL_NAME,
+        api_base=ChunkAPIConfig.API_URL,
+        api_key=ChunkAPIConfig.API_KEY,
+        enable_parallelism=Config.ENABLE_PARALLELISM,
+    ):
+        """Initialize the LLMChunker with specified backend and API configurations.
 
         Args:
             backend: The API backend to use. Either 'api' for OpenAI-compatible
@@ -130,7 +129,7 @@ class LLMChunker(Chunker):
             api_key: The API key for the OpenAI-compatible API.
                 Defaults to `ChunkAPIConfig.API_KEY`.
             enable_parallelism: Use multi-threading for chunking. Defaults to `False`.
-        '''
+        """
         super().__init__(enable_parallelism=enable_parallelism)
         self.num_workers = min(self.num_workers, ChunkAPIConfig.MAX_QPS)
         self.model_name = model_name
@@ -144,12 +143,11 @@ class LLMChunker(Chunker):
 
     @staticmethod
     def _remove_thinking(text: str) -> str:
-        '''
+        """
         对于推理系大模型, 输出如 `<think><Thinking Process></think>\n<Answer>`, 仅保留 `<Answer>` 部分
-        '''
-        cleaned_text = re.sub(r'(?i)<think>.*?</think>',
-                              '', text, flags=re.DOTALL)
-        cleaned_text = re.sub(r'\n\s*\n', '\n\n', cleaned_text)
+        """
+        cleaned_text = re.sub(r"(?i)<think>.*?</think>", "", text, flags=re.DOTALL)
+        cleaned_text = re.sub(r"\n\s*\n", "\n\n", cleaned_text)
         cleaned_text = cleaned_text.lstrip()
 
         return cleaned_text
@@ -166,11 +164,7 @@ class LLMChunker(Chunker):
         return chunks
 
     def _call_ollama(self, prompt: str, system_prompt: str = None) -> str:
-        payload = {
-            "model": self.model_name,
-            "prompt": prompt,
-            "stream": False
-        }
+        payload = {"model": self.model_name, "prompt": prompt, "stream": False}
         if system_prompt:
             payload["system"] = system_prompt
         try:
@@ -187,18 +181,14 @@ class LLMChunker(Chunker):
             full_prompt = f"{system_prompt}\n\n{prompt}" if system_prompt else prompt
             messages.append({"role": "user", "content": full_prompt})
             response = self.client.chat.completions.create(
-                model=self.model_name,
-                messages=messages,
-                temperature=0.7,
-                stream=False
+                model=self.model_name, messages=messages, temperature=0.7, stream=False
             )
             content = response.choices[0].message.content.strip()
             if not content:
                 raise ValueError(f"模型 {self.model_name} 返回空结果")
             return content
         except Exception as e:
-            logger.error(
-                f"API 调用失败: {e}, 请求: {prompt[:100]}...", exc_info=True)
+            logger.error(f"API 调用失败: {e}, 请求: {prompt[:100]}...", exc_info=True)
             raise e
 
     def split_text(self, text: str) -> List[str]:
@@ -213,42 +203,44 @@ class LLMChunker(Chunker):
         prompt = CHUNK_PROMPT_TEMPLATE.format(text=text, text_length=len(text))
 
         try:
-            if self.backend == 'ollama':
-                response = self._call_ollama(
-                    prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
-            elif self.backend == 'api':
-                response = self._call_open_api(
-                    prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
+            if self.backend == "ollama":
+                response = self._call_ollama(prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
+            elif self.backend == "api":
+                response = self._call_open_api(prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
 
             # In case of using reasoning model
             # It's not recommended to use reasoning model(e.g. Deepseek-R1) for chunking,
             # as it requires more **TIME** and **TOKEN COST**
             cleaned_text = self._remove_thinking(response)
-            
-            result_chunks = [chunk.strip() for chunk in cleaned_text.split(
-                "[CHUNK_BREAK]") if chunk.strip()]
+
+            result_chunks = [
+                chunk.strip()
+                for chunk in cleaned_text.split("[CHUNK_BREAK]")
+                if chunk.strip()
+            ]
 
             if len(result_chunks) <= 1:
                 logger.warning("LLM只生成了一个块或返回空结果，使用备选分块方法")
                 return self.create_sentence_chunks(text)
 
             # In case of LLM adds or removes some content unexpectedly
-            reconstructed_text = "".join([chunk.strip()
-                                         for chunk in result_chunks])
+            reconstructed_text = "".join([chunk.strip() for chunk in result_chunks])
             original_text = text.strip()
-            similarity_ratio = len(reconstructed_text) / \
-                len(original_text) if original_text else 0
+            similarity_ratio = (
+                len(reconstructed_text) / len(original_text) if original_text else 0
+            )
 
             # ratio of 0.95-1.05 is considered acceptable
             # NO RETRY, use second choice for convenience
             if similarity_ratio < 0.95 or similarity_ratio > 1.05:
                 logger.warning(
-                    f"分块内容与原文不匹配 (原文长度：{len(original_text)} 分块后：{len(reconstructed_text)} 相似度比例: {similarity_ratio:.4f})")
+                    f"分块内容与原文不匹配 (原文长度：{len(original_text)} 分块后：{len(reconstructed_text)} 相似度比例: {similarity_ratio:.4f})"
+                )
                 return self.create_sentence_chunks(text)
-            
+
             logger.info(f"LLM成功生成 {len(result_chunks)} 个语义块")
             return result_chunks
-            
+
         except Exception as e:
             logger.error(f"LLM分块失败，使用备选方法: {e}")
             return self.create_sentence_chunks(text)

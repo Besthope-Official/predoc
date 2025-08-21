@@ -1,52 +1,56 @@
 import os
 import torch
 from dataclasses import dataclass, field
-from typing import List, Dict
 from loguru import logger
 
-os.environ['TOKENIZERS_PARALLELISM'] = "true"
+os.environ["TOKENIZERS_PARALLELISM"] = "true"
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 
 @dataclass
 class ModelConfig:
     DEBUG: bool = field(
-        default_factory=lambda: os.getenv("DEBUG", "false").lower() == "true")
+        default_factory=lambda: os.getenv("DEBUG", "false").lower() == "true"
+    )
     DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
     CHUNK_OUTPUT_DIR: str = os.getenv("CHUNK_OUTPUT_DIR", "./output/chunks")
-    CHUNKS_FILE: str = field(
-        default_factory=lambda: os.getenv("CHUNKS_FILE", ""))
-    BATCH_SIZE: int = field(
-        default_factory=lambda: int(os.getenv("BATCH_SIZE", "4")))
-    CHUNK_SIZE: int = field(default_factory=lambda: int(
-        os.getenv("CHUNK_SIZE", "512")))
-    CHUNK_OVERLAP: int = field(default_factory=lambda: int(
-        os.getenv("CHUNK_OVERLAP", "16")))
-    MIN_CHUNK_LENGTH: int = field(default_factory=lambda: int(
-        os.getenv("MIN_CHUNK_LENGTH", "50")))
-    MAX_LENGTH: int = field(default_factory=lambda: int(
-        os.getenv("MAX_LENGTH", "512")))
+    CHUNKS_FILE: str = field(default_factory=lambda: os.getenv("CHUNKS_FILE", ""))
+    BATCH_SIZE: int = field(default_factory=lambda: int(os.getenv("BATCH_SIZE", "4")))
+    CHUNK_SIZE: int = field(default_factory=lambda: int(os.getenv("CHUNK_SIZE", "512")))
+    CHUNK_OVERLAP: int = field(
+        default_factory=lambda: int(os.getenv("CHUNK_OVERLAP", "16"))
+    )
+    MIN_CHUNK_LENGTH: int = field(
+        default_factory=lambda: int(os.getenv("MIN_CHUNK_LENGTH", "50"))
+    )
+    MAX_LENGTH: int = field(default_factory=lambda: int(os.getenv("MAX_LENGTH", "512")))
     ENCODING: str = os.getenv("ENCODING", "utf-8-sig")
     EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-    EMBEDDING_MODEL_DIR: str = os.getenv(
-        "EMBEDDING_MODEL_DIR", "./models/embedding")
+    EMBEDDING_MODEL_DIR: str = os.getenv("EMBEDDING_MODEL_DIR", "./models/embedding")
     EMBEDDING_MODEL_NAME: str = os.getenv(
-        "EMBEDDING_MODEL_NAME", "paraphrase-multilingual-mpnet-base-v2")
+        "EMBEDDING_MODEL_NAME", "paraphrase-multilingual-mpnet-base-v2"
+    )
     EMBEDDING_HF_REPO_ID: str = os.getenv(
-        "EMBEDDING_HF_REPO_ID", "sentence-transformers/paraphrase-multilingual-mpnet-base-v2")
+        "EMBEDDING_HF_REPO_ID",
+        "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+    )
 
     YOLO_MODEL_DIR: str = os.getenv("YOLO_MODEL_DIR", "./models/YOLOv10")
     YOLO_MODEL_FILENAME: str = os.getenv(
-        "YOLO_MODEL_FILENAME", "doclayout_yolo_docstructbench_imgsz1024.pt")
+        "YOLO_MODEL_FILENAME", "doclayout_yolo_docstructbench_imgsz1024.pt"
+    )
     YOLO_HF_REPO_ID: str = os.getenv(
-        "YOLO_HF_REPO_ID", "juliozhao/DocLayout-YOLO-DocStructBench")
+        "YOLO_HF_REPO_ID", "juliozhao/DocLayout-YOLO-DocStructBench"
+    )
 
     def validate_path(self, path: str, needs_write: bool = True) -> str:
         dir_path = os.path.dirname(path) or path
         try:
             if not os.path.exists(dir_path):
                 os.makedirs(dir_path, exist_ok=True)
-            if not os.access(dir_path, os.R_OK) or (needs_write and not os.access(dir_path, os.W_OK)):
+            if not os.access(dir_path, os.R_OK) or (
+                needs_write and not os.access(dir_path, os.W_OK)
+            ):
                 raise PermissionError(f"目录 {dir_path} 无读写权限")
             if os.path.isfile(path) and needs_write and not os.access(path, os.W_OK):
                 raise PermissionError(f"文件 {path} 无写权限")
@@ -69,8 +73,7 @@ class ModelConfig:
             logger.error(f"参数验证失败: {e}")
             raise
 
-        logger.info(
-            f"配置加载成功: EMBEDDING_MODEL={self.EMBEDDING_MODEL}")
+        logger.info(f"配置加载成功: EMBEDDING_MODEL={self.EMBEDDING_MODEL}")
 
 
 try:

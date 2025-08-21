@@ -1,4 +1,4 @@
-'''封装 API'''
+"""封装 API"""
 
 import os
 import tempfile
@@ -51,8 +51,7 @@ async def lifespan(app: FastAPI):
     consumer = get_task_consumer()
 
     consumer_thread = threading.Thread(
-        target=lambda: start_task_consumer(consumer),
-        daemon=True
+        target=lambda: start_task_consumer(consumer), daemon=True
     )
     consumer_thread.start()
 
@@ -66,7 +65,7 @@ app = FastAPI(
     title="PreDoc API",
     description="文档预处理服务API",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 
@@ -74,8 +73,7 @@ app = FastAPI(
 async def http_exception_handler(request, exc):
     """HTTP异常处理器"""
     return JSONResponse(
-        status_code=exc.status_code,
-        content=api_fail(message=str(exc.detail))
+        status_code=exc.status_code, content=api_fail(message=str(exc.detail))
     )
 
 
@@ -83,16 +81,13 @@ async def http_exception_handler(request, exc):
 async def general_exception_handler(request, exc):
     """通用异常处理器"""
     logger.error(f"未处理的异常: {exc}")
-    return JSONResponse(
-        status_code=500,
-        content=api_fail(message="服务器内部错误")
-    )
+    return JSONResponse(status_code=500, content=api_fail(message="服务器内部错误"))
 
 
 async def get_processor(
     chunker_strategy: str,
     model_loader: Annotated[ModelLoader, Depends(get_model_loader)],
-    temp_dir: str
+    temp_dir: str,
 ) -> PDFProcessor:
     """获取文档处理器"""
     chunker = model_loader.get_chunker(chunker_strategy)
@@ -101,7 +96,7 @@ async def get_processor(
         parser=model_loader.parser,
         embedder=model_loader.embedder,
         output_dir=temp_dir,
-        upload_to_oss=True
+        upload_to_oss=True,
     )
 
 
@@ -111,13 +106,13 @@ async def document_preprocess(
     docFile: UploadFile = File(...),
     docType: str = Form("article"),
     parseMethod: str = Form("auto"),
-    chunkStrategy: str = Form("semantic")
+    chunkStrategy: str = Form("semantic"),
 ) -> ApiResponse:
-    '''预处理文档接口'''
+    """预处理文档接口"""
     if not docFile.filename:
         raise HTTPException(status_code=400, detail="未提供文件")
 
-    if not docFile.filename.lower().endswith('.pdf'):
+    if not docFile.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="只支持PDF文件")
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -145,10 +140,10 @@ async def document_preprocess(
 async def pdf_parse(
     model_loader: Annotated[ModelLoader, Depends(get_model_loader)],
     file: UploadFile = File(...),
-    parseMethod: str = Form("auto")
+    parseMethod: str = Form("auto"),
 ) -> ApiResponse:
-    '''接收PDF文件和解析方式，返回解析后的文本'''
-    if not file.filename.lower().endswith('.pdf'):
+    """接收PDF文件和解析方式，返回解析后的文本"""
+    if not file.filename.lower().endswith(".pdf"):
         raise HTTPException(status_code=400, detail="只支持PDF文件")
 
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -175,9 +170,9 @@ async def pdf_parse(
 async def document_chunk(
     model_loader: Annotated[ModelLoader, Depends(get_model_loader)],
     text: str = Body(...),
-    chunkStrategy: str = Body("semantic")
+    chunkStrategy: str = Body("semantic"),
 ) -> ApiResponse:
-    '''接收一段文本，按照给定的分块方法，返回分块后的文本列表'''
+    """接收一段文本，按照给定的分块方法，返回分块后的文本列表"""
     if not text.strip():
         logger.warning("收到空文本请求，返回空列表")
         return api_success(data=[])
@@ -195,9 +190,9 @@ async def document_chunk(
 async def text_embedding(
     model_loader: Annotated[ModelLoader, Depends(get_model_loader)],
     text: str = Body(...),
-    model: str = Body("paraphrase-multilingual-mpnet-base-v2")
+    model: str = Body("paraphrase-multilingual-mpnet-base-v2"),
 ) -> ApiResponse:
-    '''对给定的文本，按照指定的嵌入模型，进行向量嵌入'''
+    """对给定的文本，按照指定的嵌入模型，进行向量嵌入"""
     if not text.strip():
         logger.warning("收到空文本请求，返回空向量")
         return api_success(data={"embedding": []})
@@ -216,13 +211,10 @@ async def document_retrieval(
     query: str = Body(...),
     topK: int = Body(5),
 ) -> ApiResponse:
-    '''接收查询字符串，返回检索到的文档列表'''
+    """接收查询字符串，返回检索到的文档列表"""
     try:
         results = retrieve_documents(query, k=topK)
-        response_data = {
-            "doc": results["docs"],
-            "chunks": results["chunks"]
-        }
+        response_data = {"doc": results["docs"], "chunks": results["chunks"]}
 
         return api_success(data=response_data)
 

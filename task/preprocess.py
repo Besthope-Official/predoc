@@ -9,7 +9,7 @@ from prep.chunker import LLMChunker
 from prep.parser import YoloParser
 from prep.embedding import EmbeddingModel
 
-from task.oss import download_file, upload_file, clear_directory, check_file_exists
+from task.oss import download_file, check_file_exists
 from task.milvus import store_embedding_task
 from schemas import Task
 
@@ -25,7 +25,7 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
     """
     temp_dir = None
     try:
-        temp_base_dir = Path(os.environ.get('TEMP', '/tmp'))
+        temp_base_dir = Path(os.environ.get("TEMP", "/tmp"))
         temp_dir = temp_base_dir / f"task_{task.task_id}"
         temp_dir.mkdir(parents=True, exist_ok=True)
 
@@ -39,7 +39,7 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             download_file(
                 object_name=parsed_text,
                 file_path=local_text_path,
-                bucket_name=OSSConfig.minio_bucket
+                bucket_name=OSSConfig.minio_bucket,
             )
             logger.info(f"预解析文件 {parsed_text} 已从 OSS 下载到 {local_text_path}")
             with open(local_text_path, "r", encoding="utf-8") as f:
@@ -50,28 +50,26 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             chunks = chunker.chunk(text)
             embeddings = embedder.generate_embeddings(chunks)
         else:
-            download_file(
-                object_name=task.document.fileName,
-                file_path=local_file_path
-            )
+            download_file(object_name=task.document.fileName, file_path=local_file_path)
             logger.info(
-                f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}")
+                f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}"
+            )
 
             processor = PDFProcessor(
                 chunker=LLMChunker(),
                 parser=YoloParser(),
                 embedder=EmbeddingModel(),
                 output_dir=str(temp_dir),
-                upload_to_oss=True
+                upload_to_oss=True,
             )
 
             chunks, embeddings = processor.preprocess(
-                file_path=str(local_file_path),
-                wrapper=False
+                file_path=str(local_file_path), wrapper=False
             )
 
             logger.info(
-                f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {temp_dir}")
+                f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {temp_dir}"
+            )
 
         if temp_dir and temp_dir.exists():
             shutil.rmtree(temp_dir)
@@ -84,9 +82,5 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
             logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
         raise
 
-    store_embedding_task(
-        embedding=embeddings,
-        chunk_text=chunks,
-        task=task
-    )
+    store_embedding_task(embedding=embeddings, chunk_text=chunks, task=task)
     logger.info(f"任务 {task.task_id} 处理完成，结果已存储到 Milvus")

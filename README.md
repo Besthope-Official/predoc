@@ -41,6 +41,12 @@ chunker = LLMChunker(
 
 You can also use `api` backend to use any OpenAI-compatible API, e.g. you can use vLLM to deploy a model on your own server.
 
+For contributor, install git hook before you commit:
+
+```bash
+pre-commit install
+```
+
 ### Install from Docker
 
 We provide CPU/GPU Docker images to suit different deployment needs. See [Docker Build Guide](docker/README.md) for detailed documentation.
@@ -64,4 +70,4 @@ check `/docs` for API documentation.
 ## TODOs
 
 - paddleocr support
-- 
+-
