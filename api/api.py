@@ -11,7 +11,7 @@ from loguru import logger
 import threading
 from functools import lru_cache
 
-from prep.processor import PDFProcessor
+from predoc.processor import PDFProcessor
 from retrieve.search import retrieve_documents
 from .utils import ModelLoader, api_success, api_fail, ApiResponse
 from task.task import TaskConsumer

@@ -4,9 +4,9 @@ from typing_extensions import TypedDict
 from typing import Any, Optional
 from loguru import logger
 
-from prep.parser import Parser, YoloParser
-from prep.chunker import Chunker, LLMChunker, SentenceChunker
-from prep.embedding import EmbeddingModel
+from predoc.parser import Parser, YoloParser
+from predoc.chunker import Chunker, LLMChunker, SentenceChunker
+from predoc.embedding import EmbeddingModel
 
 
 class ModelLoader:

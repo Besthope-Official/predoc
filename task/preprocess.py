@@ -4,10 +4,10 @@ from pathlib import Path
 from loguru import logger
 
 from config.backend import OSSConfig
-from prep.processor import PDFProcessor
-from prep.chunker import LLMChunker
-from prep.parser import YoloParser
-from prep.embedding import EmbeddingModel
+from predoc.processor import PDFProcessor
+from predoc.chunker import LLMChunker
+from predoc.parser import YoloParser
+from predoc.embedding import EmbeddingModel
 
 from task.oss import download_file, check_file_exists
 from task.milvus import store_embedding_task

@@ -21,9 +21,9 @@ import json
 from pathlib import Path
 from typing import List
 
-from prep.processor import PDFProcessor
-from prep.chunker import LLMChunker, SentenceChunker
-from prep.parser import YoloParser
+from predoc.processor import PDFProcessor
+from predoc.chunker import LLMChunker, SentenceChunker
+from predoc.parser import YoloParser
 
 
 class TestPDFProcessing:
