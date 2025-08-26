@@ -186,3 +186,6 @@ cython_debug/
 # Models
 models/embedding/
 models/YOLOv10/
+
+# backup
+/backup

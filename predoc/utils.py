@@ -4,11 +4,14 @@ from typing import List
 
 
 class TextSplitter:
-    '''Utils for splitting text into smaller sections to chunk.'''
+    """Utils for splitting text into smaller sections to chunk."""
+
     @staticmethod
-    def split_text_into_sections(text: str, max_section_length=1500, min_section_length=300):
+    def split_text_into_sections(
+        text: str, max_section_length=1500, min_section_length=300
+    ):
         """将文本分割成适合模型处理的大段，增加最小长度控制"""
-        paragraphs = re.split(r'\n\s*\n', text)
+        paragraphs = re.split(r"\n\s*\n", text)
         paragraphs = [p.strip() for p in paragraphs if p.strip()]
 
         sections = []
@@ -24,9 +27,13 @@ class TextSplitter:
                     current_length = 0
 
                 sub_sections = TextSplitter._split_long_paragraph(
-                    para, max_section_length)
+                    para, max_section_length
+                )
                 sections.extend(sub_sections)
-            elif current_length + para_length + 2 > max_section_length and current_section:
+            elif (
+                current_length + para_length + 2 > max_section_length
+                and current_section
+            ):
                 if current_length >= min_section_length:
                     sections.append("\n\n".join(current_section))
                     current_section = [para]
@@ -46,18 +53,19 @@ class TextSplitter:
                 sections.append(final_section)
 
         logger.info(
-            f"文本已分割为 {len(sections)} 个大段，平均每段 {sum(len(s) for s in sections) / len(sections):.2f} 字符")
+            f"文本已分割为 {len(sections)} 个大段，平均每段 {sum(len(s) for s in sections) / len(sections):.2f} 字符"
+        )
         return sections
 
     @staticmethod
     def split_into_sentences(text):
         """将文本分割成句子"""
-        sentences = re.split(r'(?<=[。！？.!?])', text)
+        sentences = re.split(r"(?<=[。！？.!?])", text)
         return [s.strip() for s in sentences if s.strip()]
 
     @staticmethod
     def _split_long_paragraph(para: str, max_length: int) -> List[str]:
-        sentences = re.split(r'(?<=[。！？.!?])', para)
+        sentences = re.split(r"(?<=[。！？.!?])", para)
         sections = []
         current_section = []
         current_length = 0
@@ -85,7 +93,7 @@ class TextSplitter:
 def clean_text(text: str) -> str:
     if not text:
         return ""
-    text = re.sub(r'[\x00-\x1F\x7F-\x9F\u200b-\u200d\uFEFF]', '', text)
+    text = re.sub(r"[\x00-\x1F\x7F-\x9F\u200b-\u200d\uFEFF]", "", text)
     return text.strip()
 
 
@@ -95,7 +103,7 @@ def extract_markers(text: str) -> tuple[List, List, str]:
     clean_text = ""
     last_pos = 0
 
-    for match in re.finditer(r'\[/(table|formula|figure)\]\[\d+\]\[/\1\]', text):
+    for match in re.finditer(r"\[/(table|formula|figure)\]\[\d+\]\[/\1\]", text):
         start, end = match.span()
         markers.append((match.group(), start))
         clean_text += text[last_pos:start]
@@ -105,7 +113,7 @@ def extract_markers(text: str) -> tuple[List, List, str]:
     last_pos = 0
     final_clean = ""
 
-    for match in re.finditer(r'\[PAGE\]\[\d+\]\[PAGE\]', remaining_text):
+    for match in re.finditer(r"\[PAGE\]\[\d+\]\[PAGE\]", remaining_text):
         start, end = match.span()
         pages.append((match.group(), start))
         final_clean += remaining_text[last_pos:start]
@@ -115,7 +123,9 @@ def extract_markers(text: str) -> tuple[List, List, str]:
     return markers, pages, clean_text + final_clean
 
 
-def reconstruct_chunks(chunks: List[str], markers: List, pages: List, orig_length: int) -> List[str]:
+def reconstruct_chunks(
+    chunks: List[str], markers: List, pages: List, orig_length: int
+) -> List[str]:
     reconstructed = []
     current_pos = 0
 
@@ -139,4 +149,7 @@ def reconstruct_chunks(chunks: List[str], markers: List, pages: List, orig_lengt
         reconstructed.append(new_chunk)
         current_pos += len(chunk)
 
-    return [chunk for chunk in reconstructed + [m[0] for m in markers] + [p[0] for p in pages]]
+    return [
+        chunk
+        for chunk in reconstructed + [m[0] for m in markers] + [p[0] for p in pages]
+    ]

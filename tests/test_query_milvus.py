@@ -24,30 +24,23 @@ def timed_retrieve_documents(query: str, k=K):
     query_times.append(elapsed_time)
 
     docs = result.get("docs", [])
-    results = [
-        {
-            "title": doc["title"]
-        } for doc in docs
-    ]
+    results = [{"title": doc["title"]} for doc in docs]
 
     return results
 
 
 def hit_at_k(results, doc_title, k=K):
-    '''
-        Validate query results title match corresponding doc title.
-        >>> results = [
-            {"title": "doc1", ...}
-            {"title": "doc2", ...},
-            {"title": "doc3", ...},
-        ]
-        >>> hit_at_k(results, "doc1", k=3)
-        >>> True
-    '''
-    return any(
-        doc["title"] == doc_title
-        for doc in results[:k]
-    )
+    """
+    Validate query results title match corresponding doc title.
+    >>> results = [
+        {"title": "doc1", ...}
+        {"title": "doc2", ...},
+        {"title": "doc3", ...},
+    ]
+    >>> hit_at_k(results, "doc1", k=3)
+    >>> True
+    """
+    return any(doc["title"] == doc_title for doc in results[:k])
 
 
 @pytest.fixture(scope="session")
@@ -69,12 +62,11 @@ def connect_milvus_available():
 
 
 class TestQueryMilvus:
-
     @pytest.mark.skipif(not connect_milvus_available(), reason="Milvus Unavailable")
-    @pytest.mark.parametrize("question_type,questions_key", [
-        ("chinese", "chinese_questions"),
-        ("english", "english_questions")
-    ])
+    @pytest.mark.parametrize(
+        "question_type,questions_key",
+        [("chinese", "chinese_questions"), ("english", "english_questions")],
+    )
     def test_direct_query(self, qa_data, question_type, questions_key):
         """Test questions retrieval for different languages."""
         global zh_hits, zh_total, en_hits, en_total
@@ -87,8 +79,7 @@ class TestQueryMilvus:
             en_total = len(questions)
 
         for question in questions:
-            results = timed_retrieve_documents(
-                question["question"], k=K)
+            results = timed_retrieve_documents(question["question"], k=K)
             answer_title = question["source"]
 
             if hit_at_k(results, answer_title):
@@ -99,10 +90,14 @@ class TestQueryMilvus:
 
         if question_type == "chinese":
             hit_rate = zh_hits / zh_total if zh_total > 0 else 0
-            assert hit_rate >= threshold, f"中文问题命中率 {hit_rate:.4f} 低于阈值 {threshold}"
+            assert (
+                hit_rate >= threshold
+            ), f"中文问题命中率 {hit_rate:.4f} 低于阈值 {threshold}"
         else:
             hit_rate = en_hits / en_total if en_total > 0 else 0
-            assert hit_rate >= threshold, f"英文问题命中率 {hit_rate:.4f} 低于阈值 {threshold}"
+            assert (
+                hit_rate >= threshold
+            ), f"英文问题命中率 {hit_rate:.4f} 低于阈值 {threshold}"
 
     @pytest.fixture(scope="session", autouse=True)
     def print_final_stats(self):
@@ -111,7 +106,7 @@ class TestQueryMilvus:
 
         if query_times:
             avg_query_time = sum(query_times) / len(query_times)
-            print(f"\n=== 测试统计结果 ===")
+            print("\n=== 测试统计结果 ===")
             print(f"总查询次数: {len(query_times)}")
             print(f"平均查询时间: {avg_query_time:.4f} 秒")
 
@@ -121,7 +116,8 @@ class TestQueryMilvus:
         print(f"中文问题 hit@{K}: {zh_hits}/{zh_total} = {zh_hit_rate:.4f}")
         print(f"英文问题 hit@{K}: {en_hits}/{en_total} = {en_hit_rate:.4f}")
         print(
-            f"总体 hit@{K}: {(zh_hits + en_hits)}/{(zh_total + en_total)} = {(zh_hits + en_hits)/(zh_total + en_total):.4f}")
+            f"总体 hit@{K}: {(zh_hits + en_hits)}/{(zh_total + en_total)} = {(zh_hits + en_hits)/(zh_total + en_total):.4f}"
+        )
 
 
 if __name__ == "__main__":

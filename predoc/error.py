@@ -1,4 +1,4 @@
-'''自定义异常'''
+"""自定义异常"""
 
 
 class ParseResultEmptyException(Exception):
