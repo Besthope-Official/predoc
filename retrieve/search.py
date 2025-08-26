@@ -20,8 +20,10 @@ def generate_image_url(title: str, element_type: str, idx: int) -> str:
         图片的公开访问 URL
     """
     object_name = f"{title}/{element_type}_{idx}.png"
-    url = urljoin(f"http://{OSSConfig.endpoint}",
-                  f"{OSSConfig.preprocessed_files_bucket}/{object_name}")
+    url = urljoin(
+        f"http://{OSSConfig.endpoint}",
+        f"{OSSConfig.preprocessed_files_bucket}/{object_name}",
+    )
     return url
 
 
@@ -48,7 +50,7 @@ def retrieve_documents(query: str, k: int = 50) -> Dict[str, List[Dict[str, Any]
 
     for raw_result in raw_results[0]:
         try:
-            metadata = json.loads(raw_result['entity']['metadata'])
+            metadata = json.loads(raw_result["entity"]["metadata"])
             title = metadata.get("title", "")
 
             if title not in seen_titles:
@@ -57,22 +59,22 @@ def retrieve_documents(query: str, k: int = 50) -> Dict[str, List[Dict[str, Any]
                 doc_id_map[title] = doc_id
 
                 doc = {
-                    "idx": raw_result['id'],
+                    "idx": raw_result["id"],
                     "title": title,
                     "authors": metadata.get("authors", []),
                     "publicationDate": metadata.get("publicationDate", ""),
                     "language": metadata.get("language", ""),
-                    "keywords": [item["name"] for item in metadata.get("keywords", [])]
+                    "keywords": [item["name"] for item in metadata.get("keywords", [])],
                 }
                 docs.append(doc)
             images = []
 
             chunk = {
-                "id": raw_result['id'],
+                "id": raw_result["id"],
                 "doc_id": doc_id_map.get(title, -1),
-                "page": raw_result['entity']['page'],
-                "text": raw_result['entity']['chunk'],
-                "images": images
+                "page": raw_result["entity"]["page"],
+                "text": raw_result["entity"]["chunk"],
+                "images": images,
             }
             chunks.append(chunk)
 

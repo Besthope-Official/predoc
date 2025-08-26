@@ -6,20 +6,19 @@
 import os
 from transformers import AutoTokenizer, AutoModel
 from sentence_transformers import SentenceTransformer
-from typing import Dict, Tuple
+from typing import Tuple
 from functools import lru_cache
 from doclayout_yolo import YOLOv10
 from huggingface_hub import hf_hub_download
 from config.model import CONFIG
 from loguru import logger
-import pathlib
 
 
 def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
-    '''
+    """
     Returns local path for model. If model doesn't exist locally, downloads it from HuggingFace
     and saves to specified local directory.
-    '''
+    """
     local_model_path = os.path.join(local_dir, model_name)
 
     if os.path.exists(local_model_path) and os.access(local_model_path, os.R_OK):
@@ -31,26 +30,27 @@ def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
     logger.info(f"Downloading model from {hf_repo_id} to {local_model_path}")
     try:
         # Specific for YOLO model
-        if isinstance(model_name, str) and model_name.endswith('.pt'):
+        if isinstance(model_name, str) and model_name.endswith(".pt"):
             filepath = hf_hub_download(
                 repo_id=hf_repo_id,
                 filename=model_name,
                 local_dir=local_dir,
-                local_dir_use_symlinks=False
+                local_dir_use_symlinks=False,
             )
             return filepath
 
         return hf_repo_id
     except Exception as e:
-        raise RuntimeError(
-            f"Failed to download model from {hf_repo_id}: {str(e)}")
+        raise RuntimeError(f"Failed to download model from {hf_repo_id}: {str(e)}")
 
 
 @lru_cache(maxsize=8)
-def _load_tokenizer_and_model(model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE) -> Tuple[AutoTokenizer, AutoModel]:
-    '''
+def _load_tokenizer_and_model(
+    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE
+) -> Tuple[AutoTokenizer, AutoModel]:
+    """
     Load AutoTokenizer and AutoModel. Downloads and saves to local_dir if not present.
-    '''
+    """
     model_name_or_path = _model_or_path(model_name, local_dir, hf_repo_id)
     local_model_path = os.path.join(local_dir, model_name)
 
@@ -70,10 +70,12 @@ def _load_tokenizer_and_model(model_name: str, local_dir: str, hf_repo_id: str, 
 
 
 @lru_cache(maxsize=8)
-def _load_sentence_transformer(model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE) -> SentenceTransformer:
-    '''
+def _load_sentence_transformer(
+    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE
+) -> SentenceTransformer:
+    """
     Load SentenceTransformer model. Downloads and saves to local_dir if not present.
-    '''
+    """
     model_name_or_path = _model_or_path(model_name, local_dir, hf_repo_id)
     local_model_path = os.path.join(local_dir, model_name)
 
@@ -89,32 +91,40 @@ def _load_sentence_transformer(model_name: str, local_dir: str, hf_repo_id: str,
 
 
 @lru_cache(maxsize=8)
-def _load_yolo_model(model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE):
-    '''
+def _load_yolo_model(
+    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE
+):
+    """
     Load YOLOv10 model. Downloads and saves to local_dir if not present.
-    '''
+    """
     model_path = _model_or_path(model_name, local_dir, hf_repo_id)
     logger.info(f"Loading YOLO model from: {model_path}")
     model = YOLOv10(model_path)
     return model
 
 
-def init_model(model_type='st'):
-    '''Initialize the model based on the type specified in the config.'''
+def init_model(model_type="st"):
+    """Initialize the model based on the type specified in the config."""
     try:
         if model_type == "hf":
             # This type of embedding model is not used in current project.
             auto_tokenizer, auto_model = _load_tokenizer_and_model(
-                CONFIG.EMBEDDING_MODEL_NAME, CONFIG.EMBEDDING_MODEL_DIR, CONFIG.EMBEDDING_HF_REPO_ID
+                CONFIG.EMBEDDING_MODEL_NAME,
+                CONFIG.EMBEDDING_MODEL_DIR,
+                CONFIG.EMBEDDING_HF_REPO_ID,
             )
             model = (auto_tokenizer, auto_model)
         elif model_type == "st":
             model = _load_sentence_transformer(
-                CONFIG.EMBEDDING_MODEL_NAME, CONFIG.EMBEDDING_MODEL_DIR, CONFIG.EMBEDDING_HF_REPO_ID
+                CONFIG.EMBEDDING_MODEL_NAME,
+                CONFIG.EMBEDDING_MODEL_DIR,
+                CONFIG.EMBEDDING_HF_REPO_ID,
             )
         elif model_type == "yolo":
             model = _load_yolo_model(
-                CONFIG.YOLO_MODEL_FILENAME, CONFIG.YOLO_MODEL_DIR, CONFIG.YOLO_HF_REPO_ID
+                CONFIG.YOLO_MODEL_FILENAME,
+                CONFIG.YOLO_MODEL_DIR,
+                CONFIG.YOLO_HF_REPO_ID,
             )
         else:
             raise ValueError(f"Unknown model type: {model_type}")

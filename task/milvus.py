@@ -1,11 +1,11 @@
 """
 提供milvus向量数据库的插入和查询功能
 """
+
 from typing import List
 from pymilvus import MilvusClient, DataType
 from config.backend import MilvusConfig
 from schemas import Task
-from loguru import logger
 import json
 import re
 
@@ -27,11 +27,7 @@ def _get_milvus_client() -> MilvusClient:
 
         token = f"{config.user}:{config.password}" if config.user else None
 
-        _milvus_client = MilvusClient(
-            uri=uri,
-            token=token,
-            db_name=config.db_name
-        )
+        _milvus_client = MilvusClient(uri=uri, token=token, db_name=config.db_name)
     return _milvus_client
 
 
@@ -42,33 +38,16 @@ def _build_schema() -> None:
     schema = MilvusClient.create_schema()
 
     schema.add_field(
-        field_name="id",
-        datatype=DataType.INT64,
-        is_primary=True,
-        auto_id=True
+        field_name="id", datatype=DataType.INT64, is_primary=True, auto_id=True
     )
-    schema.add_field(
-        field_name="embedding",
-        datatype=DataType.FLOAT_VECTOR,
-        dim=768
-    )
+    schema.add_field(field_name="embedding", datatype=DataType.FLOAT_VECTOR, dim=768)
     # Note: Milvus stores bytes instead of unicode,
     # a Chinese character is 3 bytes in UTF-8,
     # see https://github.com/milvus-io/milvus/discussions/25731
     # we use 3*2048 = 6144 as default max_length.
-    schema.add_field(
-        field_name="chunk",
-        datatype=DataType.VARCHAR,
-        max_length=6144
-    )
-    schema.add_field(
-        field_name="metadata",
-        datatype=DataType.JSON
-    )
-    schema.add_field(
-        field_name="page",
-        datatype=DataType.INT64
-    )
+    schema.add_field(field_name="chunk", datatype=DataType.VARCHAR, max_length=6144)
+    schema.add_field(field_name="metadata", datatype=DataType.JSON)
+    schema.add_field(field_name="page", datatype=DataType.INT64)
     return schema
 
 
@@ -84,14 +63,13 @@ def _build_index() -> None:
         index_name="embedding_index",
         index_type="HNSW",
         metric_type="COSINE",
-        params={"nlist": 128}
+        params={"nlist": 128},
     )
 
     return index_params
 
 
-def _create_collection(
-        collection_name: str = _default_collection_name) -> None:
+def _create_collection(collection_name: str = _default_collection_name) -> None:
     """
     创建集合
     """
@@ -104,15 +82,13 @@ def _create_collection(
     index_params = _build_index()
 
     client.create_collection(
-        collection_name=collection_name,
-        schema=schema,
-        index_params=index_params
+        collection_name=collection_name, schema=schema, index_params=index_params
     )
 
 
 def _create_partition(
     collection_name: str = _default_collection_name,
-    partition_name: str = _default_partition_name
+    partition_name: str = _default_partition_name,
 ) -> None:
     """
     创建分区
@@ -126,8 +102,7 @@ def _create_partition(
         raise ValueError(f"分区 {partition_name} 已存在")
 
     client.create_partition(
-        collection_name=collection_name,
-        partition_name=partition_name
+        collection_name=collection_name, partition_name=partition_name
     )
 
 
@@ -136,7 +111,7 @@ def _store_embedding(
     chunk_text: list,
     metadata: list,
     collection_name: str = _default_collection_name,
-    partition_name: str = _default_partition_name
+    partition_name: str = _default_partition_name,
 ) -> None:
     try:
         client = _get_milvus_client()
@@ -146,8 +121,7 @@ def _store_embedding(
 
         if not client.has_partition(collection_name, partition_name):
             client.create_partition(
-                collection_name=collection_name,
-                partition_name=partition_name
+                collection_name=collection_name, partition_name=partition_name
             )
 
         data = []
@@ -163,23 +137,18 @@ def _store_embedding(
                 "embedding": embedding[i],
                 "chunk": chunk_text[i],
                 "metadata": json.dumps(metadata[i], ensure_ascii=False),
-                "page": page
+                "page": page,
             }
             data.append(tmp)
 
         client.insert(
-            collection_name=collection_name,
-            partition_name=partition_name,
-            data=data
+            collection_name=collection_name, partition_name=partition_name, data=data
         )
     except Exception as e:
         raise RuntimeError(f"插入数据失败 of store_embedding: {e}")
 
 
-def store_embedding_task(
-        embedding: list,
-        chunk_text: list,
-        task: Task) -> None:
+def store_embedding_task(embedding: list, chunk_text: list, task: Task) -> None:
     try:
         metadata_json = task.to_metadata()
         if metadata_json is None:
@@ -189,7 +158,7 @@ def store_embedding_task(
             chunk_text,
             [metadata_json] * len(embedding),
             MilvusConfig.default_collection_name,
-            MilvusConfig.default_partition_name
+            MilvusConfig.default_partition_name,
         )
 
     except Exception as e:
@@ -231,7 +200,7 @@ def search_embedding(
 
 def clear_collection(
     collection_name: str = _default_collection_name,
-    partition_name: str = _default_partition_name
+    partition_name: str = _default_partition_name,
 ) -> None:
     """
     清空集合中的数据，测试用

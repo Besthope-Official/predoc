@@ -1,4 +1,4 @@
-from typing import Dict, List
+from typing import List
 from config.model import CONFIG
 import numpy as np
 import torch
@@ -8,7 +8,7 @@ from .model import init_model
 
 
 class EmbeddingModel:
-    def __init__(self, model_type='st'):
+    def __init__(self, model_type="st"):
         self.model_type = model_type
         self.device = CONFIG.DEVICE
         self.normalize = True
@@ -26,16 +26,21 @@ class EmbeddingModel:
         embeddings = []
         with torch.no_grad(), torch.cuda.amp.autocast():
             for i in tqdm(range(0, len(texts), batch_size), desc="生成嵌入"):
-                batch = texts[i:i + batch_size]
+                batch = texts[i : i + batch_size]
                 try:
-                    inputs = tokenizer(batch, padding=True, truncation=True,
-                                       max_length=CONFIG.MAX_LENGTH, return_tensors="pt").to(self.device)
+                    inputs = tokenizer(
+                        batch,
+                        padding=True,
+                        truncation=True,
+                        max_length=CONFIG.MAX_LENGTH,
+                        return_tensors="pt",
+                    ).to(self.device)
                     outputs = model(**inputs)
-                    batch_emb = outputs.last_hidden_state[:, 0, :].cpu(
-                    ).numpy()
+                    batch_emb = outputs.last_hidden_state[:, 0, :].cpu().numpy()
                     if self.normalize:
-                        batch_emb = batch_emb / \
-                            np.linalg.norm(batch_emb, axis=1, keepdims=True)
+                        batch_emb = batch_emb / np.linalg.norm(
+                            batch_emb, axis=1, keepdims=True
+                        )
                     embeddings.append(batch_emb)
                 except Exception as e:
                     logger.warning(f"批次 {i} 处理失败: {e}, 跳过文本: {batch[:50]}...")
@@ -61,14 +66,19 @@ class EmbeddingModel:
             else:
                 show_progress_bar = CONFIG.DEBUG
                 result = self.model.encode(
-                    texts, batch_size=batch_size, show_progress_bar=show_progress_bar,
-                    convert_to_numpy=True, normalize_embeddings=self.normalize, device=self.device
+                    texts,
+                    batch_size=batch_size,
+                    show_progress_bar=show_progress_bar,
+                    convert_to_numpy=True,
+                    normalize_embeddings=self.normalize,
+                    device=self.device,
                 )
             if not isinstance(result, np.ndarray) or result.size == 0:
                 logger.warning("嵌入生成结果无效，返回空数组")
                 result = np.array([])
             logger.info(
-                f"生成嵌入完成，向量数: {result.shape[0]}, 维度: {result.shape[1]}")
+                f"生成嵌入完成，向量数: {result.shape[0]}, 维度: {result.shape[1]}"
+            )
             return result
         except Exception as e:
             logger.error(f"嵌入生成失败: {e}", exc_info=True)

@@ -1,1 +1,1 @@
-'''testing module for predoc'''
+"""testing module for predoc"""

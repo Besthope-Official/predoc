@@ -1,4 +1,5 @@
-'''文档数据模型'''
+"""文档数据模型"""
+
 from pydantic import BaseModel, Field
 from datetime import datetime
 from typing import List, Optional
@@ -9,19 +10,14 @@ class Author(BaseModel):
     institution: str
 
     def to_dict(self):
-        return {
-            "name": self.name,
-            "institution": self.institution
-        }
+        return {"name": self.name, "institution": self.institution}
 
 
 class Keyword(BaseModel):
     name: str
 
     def to_dict(self):
-        return {
-            "name": self.name
-        }
+        return {"name": self.name}
 
 
 class Document(BaseModel):
@@ -29,7 +25,7 @@ class Document(BaseModel):
     authors: List[Author]
     keywords: List[Keyword]
     fileName: str
-    docType: str = Field(alias='doc_type')
+    docType: str = Field(alias="doc_type")
     publicationDate: Optional[datetime] = None
     language: Optional[str] = "unknown"
 

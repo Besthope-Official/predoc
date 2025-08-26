@@ -1,8 +1,9 @@
 """
 提供 OSS (基于 MinIO) 文件上传和下载功能
 """
+
 import os
-from typing import Optional, Union, IO, List
+from typing import Optional, Union
 from pathlib import Path
 from minio import Minio
 from minio.error import S3Error
@@ -27,20 +28,13 @@ def get_minio_client() -> Minio:
         endpoint = endpoint.split("://", 1)[1]
 
     _minio_client = Minio(
-        endpoint,
-        access_key=config.access,
-        secret_key=config.secret,
-        secure=secure
+        endpoint, access_key=config.access, secret_key=config.secret, secure=secure
     )
 
     return _minio_client
 
 
-def upload_file(
-    file_path: Path,
-    object_name: str,
-    bucket_name: str
-) -> str:
+def upload_file(file_path: Path, object_name: str, bucket_name: str) -> str:
     """
     上传文件到 OSS
 
@@ -71,7 +65,7 @@ def upload_file(
             bucket_name,
             object_name,
             str(file_path),
-            content_type='application/octet-stream'
+            content_type="application/octet-stream",
         )
         logger.info(f"文件 {file_path} 成功上传到 OSS 作为对象 {object_name}")
         return object_name
@@ -86,7 +80,7 @@ def upload_file(
 def download_file(
     object_name: str,
     file_path: Union[str, Path],
-    bucket_name: Optional[str] = OSSConfig.pdf_bucket
+    bucket_name: Optional[str] = OSSConfig.pdf_bucket,
 ) -> Path:
     """
     从 OSS 下载文件
@@ -108,18 +102,13 @@ def download_file(
 
     client = get_minio_client()
 
-    client.fget_object(
-        bucket_name,
-        object_name,
-        str(file_path)
-    )
+    client.fget_object(bucket_name, object_name, str(file_path))
 
     return file_path
 
 
 def check_file_exists(
-    object_name: str,
-    bucket_name: Optional[str] = OSSConfig.preprocessed_files_bucket
+    object_name: str, bucket_name: Optional[str] = OSSConfig.preprocessed_files_bucket
 ) -> bool:
     """
     检查 OSS 中的文件是否存在
@@ -136,7 +125,7 @@ def check_file_exists(
     try:
         return client.stat_object(bucket_name, object_name) is not None
     except S3Error as e:
-        if e.code == 'NoSuchKey':
+        if e.code == "NoSuchKey":
             return False
         else:
             logger.error(f"检查文件 {object_name} 是否存在时出错: {e}")
@@ -146,7 +135,7 @@ def check_file_exists(
 def clear_directory(
     prefix: str,
     bucket_name: Optional[str] = OSSConfig.pdf_bucket,
-    recursive: bool = True
+    recursive: bool = True,
 ) -> int:
     """
     清空OSS中指定前缀（目录）下的所有对象
@@ -165,8 +154,8 @@ def clear_directory(
     client = get_minio_client()
 
     try:
-        if prefix and not prefix.endswith('/'):
-            prefix = prefix + '/'
+        if prefix and not prefix.endswith("/"):
+            prefix = prefix + "/"
 
         objects_to_delete = []
         for obj in client.list_objects(bucket_name, prefix=prefix, recursive=recursive):
@@ -183,7 +172,8 @@ def clear_directory(
 
         deleted_count = len(objects_to_delete) - errors
         logger.info(
-            f"成功从存储桶 {bucket_name} 的目录 {prefix} 中删除了 {deleted_count} 个对象")
+            f"成功从存储桶 {bucket_name} 的目录 {prefix} 中删除了 {deleted_count} 个对象"
+        )
 
         return deleted_count
     except S3Error as e:

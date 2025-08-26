@@ -2,13 +2,11 @@
 
 from typing_extensions import TypedDict
 from typing import Any, Optional
-from typing import Any, Dict
-from typing import Optional
 from loguru import logger
 
-from prep.parser import Parser, YoloParser
-from prep.chunker import Chunker, LLMChunker, SentenceChunker
-from prep.embedding import EmbeddingModel
+from predoc.parser import Parser, YoloParser
+from predoc.chunker import Chunker, LLMChunker, SentenceChunker
+from predoc.embedding import EmbeddingModel
 
 
 class ModelLoader:
@@ -84,6 +82,7 @@ class ApiResponse(TypedDict):
     """
     封装 API 的返回结果类型
     """
+
     success: bool
     data: Optional[Any]
     message: str
@@ -98,11 +97,7 @@ def api_response(success: bool, data: Any = None, message: str = "") -> ApiRespo
     :param message: 错误或提示信息
     :return: 统一格式的字典
     """
-    return {
-        "success": success,
-        "data": data,
-        "message": message
-    }
+    return {"success": success, "data": data, "message": message}
 
 
 def api_success(data: Any = None, message: str = "Success") -> ApiResponse:
