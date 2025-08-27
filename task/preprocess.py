@@ -1,20 +1,18 @@
-import os
-import shutil
-from pathlib import Path
 from loguru import logger
 
-from config.backend import OSSConfig
-from predoc.processor import PDFProcessor
-from predoc.chunker import LLMChunker
-from predoc.parser import YoloParser
-from predoc.embedding import EmbeddingModel
-
-from task.oss import download_file, check_file_exists
-from task.milvus import store_embedding_task
 from schemas import Task
+from typing import Optional
+from api.utils import ModelLoader
+from predoc.pipeline import DefaultPDFPipeline
 
 
-def preprocess(task: Task, use_cached: bool = True) -> None:
+def preprocess(
+    task: Task,
+    use_cached: bool = True,
+    model_loader: Optional[ModelLoader] = None,
+    collection_name: Optional[str] = None,
+    partition_name: Optional[str] = None,
+) -> None:
     """
     进行预处理任务，从 OSS 上获取文件，并进行预处理
     预处理后得到的图表等文件会上传到 OSS 上
@@ -23,64 +21,18 @@ def preprocess(task: Task, use_cached: bool = True) -> None:
     Args:
         use_cached: 是否使用已解析的文本，跳过解析步骤
     """
-    temp_dir = None
     try:
-        temp_base_dir = Path(os.environ.get("TEMP", "/tmp"))
-        temp_dir = temp_base_dir / f"task_{task.task_id}"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-
-        file_name_without_extension = Path(task.document.fileName).stem
-        local_file_path = temp_dir / task.document.fileName
-
-        parsed_text = f"{file_name_without_extension}/text.txt"
-        if use_cached and check_file_exists(parsed_text):
-            local_text_path = temp_dir / "text.txt"
-
-            download_file(
-                object_name=parsed_text,
-                file_path=local_text_path,
-                bucket_name=OSSConfig.preprocessed_files_bucket,
-            )
-            logger.info(f"预解析文件 {parsed_text} 已从 OSS 下载到 {local_text_path}")
-            with open(local_text_path, "r", encoding="utf-8") as f:
-                text = f.read()
-
-            chunker = LLMChunker()
-            embedder = EmbeddingModel()
-            chunks = chunker.chunk(text)
-            embeddings = embedder.generate_embeddings(chunks)
-        else:
-            download_file(object_name=task.document.fileName, file_path=local_file_path)
-            logger.info(
-                f"文件 {task.document.fileName} 已从 OSS 下载到 {local_file_path}"
-            )
-
-            processor = PDFProcessor(
-                chunker=LLMChunker(),
-                parser=YoloParser(),
-                embedder=EmbeddingModel(),
-                output_dir=str(temp_dir),
-                upload_to_oss=True,
-            )
-
-            chunks, embeddings = processor.preprocess(
-                file_path=str(local_file_path), wrapper=False
-            )
-
-            logger.info(
-                f"文件 {task.document.fileName} 解析完成，解析结果已保存到 {temp_dir}"
-            )
-
-        if temp_dir and temp_dir.exists():
-            shutil.rmtree(temp_dir)
-            logger.info(f"临时目录 {temp_dir} 已清理")
-
+        pipeline = DefaultPDFPipeline(model_loader=model_loader)
+        chunks, embeddings = pipeline.process(task.document)
     except Exception as e:
         logger.error(f"预处理任务 {task.task_id} 出错: {e}")
-        if temp_dir and temp_dir.exists():
-            shutil.rmtree(temp_dir)
-            logger.info(f"任务失败，临时目录 {temp_dir} 已清理")
         raise
 
-    store_embedding_task(embedding=embeddings, chunk_text=chunks, task=task)
+    pipeline.store_embedding(
+        chunks,
+        embeddings,
+        doc=task.document,
+        collection_name=collection_name,
+        partition_name=partition_name,
+    )
     logger.info(f"任务 {task.task_id} 处理完成，结果已存储到 Milvus")

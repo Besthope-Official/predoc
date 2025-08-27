@@ -34,3 +34,6 @@ class RabbitMQConfig:
     port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
     user: str = os.getenv("RABBITMQ_USER", "admin")
     password: str = os.getenv("RABBITMQ_PASSWORD", "admin")
+    task_queue: str = os.getenv("RABBITMQ_TASK_QUEUE", "taskQueue")
+    result_queue: str = os.getenv("RABBITMQ_RESULT_QUEUE", "respQueue")
+    consumer_workers: int = int(os.getenv("RABBITMQ_CONSUMER_WORKERS", "4"))

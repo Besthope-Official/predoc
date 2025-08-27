@@ -14,7 +14,7 @@ from functools import lru_cache
 from predoc.processor import PDFProcessor
 from retrieve.search import retrieve_documents
 from .utils import ModelLoader, api_success, api_fail, ApiResponse
-from task.task import TaskConsumer
+from task.consumer import TaskConsumer
 from config.backend import RabbitMQConfig
 from config.app import Config
 
@@ -215,10 +215,11 @@ async def text_embedding(
 async def document_retrieval(
     query: str = Body(...),
     topK: int = Body(5),
+    collection: str = Body("default_collection"),
 ) -> ApiResponse:
     """接收查询字符串，返回检索到的文档列表"""
     try:
-        results = retrieve_documents(query, k=topK)
+        results = retrieve_documents(query, k=topK, collection=collection)
         response_data = {"doc": results["docs"], "chunks": results["chunks"]}
 
         return api_success(data=response_data)
