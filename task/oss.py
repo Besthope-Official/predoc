@@ -11,6 +11,7 @@ from loguru import logger
 from config.backend import OSSConfig
 
 _minio_client = None
+_oss_config = OSSConfig.from_yaml()
 
 
 def get_minio_client() -> Minio:
@@ -20,7 +21,7 @@ def get_minio_client() -> Minio:
     if _minio_client is not None:
         return _minio_client
 
-    config = OSSConfig()
+    config = OSSConfig.from_yaml()
     secure = config.endpoint.startswith("https://")
 
     endpoint = config.endpoint
@@ -28,7 +29,10 @@ def get_minio_client() -> Minio:
         endpoint = endpoint.split("://", 1)[1]
 
     _minio_client = Minio(
-        endpoint, access_key=config.access, secret_key=config.secret, secure=secure
+        endpoint,
+        access_key=config.access_key,
+        secret_key=config.secret_key,
+        secure=secure,
     )
 
     return _minio_client
@@ -80,7 +84,7 @@ def upload_file(file_path: Path, object_name: str, bucket_name: str) -> str:
 def download_file(
     object_name: str,
     file_path: Union[str, Path],
-    bucket_name: Optional[str] = OSSConfig.pdf_bucket,
+    bucket_name: Optional[str] = None,
 ) -> Path:
     """
     从 OSS 下载文件
@@ -96,6 +100,9 @@ def download_file(
     Raises:
         S3Error: OSS操作错误或对象不存在
     """
+    if bucket_name is None:
+        bucket_name = _oss_config.pdf_bucket
+
     file_path = Path(file_path)
 
     os.makedirs(file_path.parent, exist_ok=True)
@@ -107,9 +114,7 @@ def download_file(
     return file_path
 
 
-def check_file_exists(
-    object_name: str, bucket_name: Optional[str] = OSSConfig.preprocessed_files_bucket
-) -> bool:
+def check_file_exists(object_name: str, bucket_name: Optional[str] = None) -> bool:
     """
     检查 OSS 中的文件是否存在
 
@@ -120,6 +125,9 @@ def check_file_exists(
     Returns:
         bool: 文件是否存在
     """
+    if bucket_name is None:
+        bucket_name = _oss_config.preprocessed_files_bucket
+
     client = get_minio_client()
 
     try:
@@ -134,7 +142,7 @@ def check_file_exists(
 
 def clear_directory(
     prefix: str,
-    bucket_name: Optional[str] = OSSConfig.pdf_bucket,
+    bucket_name: Optional[str] = None,
     recursive: bool = True,
 ) -> int:
     """
@@ -151,6 +159,9 @@ def clear_directory(
     Raises:
         S3Error: OSS操作错误
     """
+    if bucket_name is None:
+        bucket_name = _oss_config.pdf_bucket
+
     client = get_minio_client()
 
     try:

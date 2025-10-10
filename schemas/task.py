@@ -75,12 +75,3 @@ class Task(BaseModel):
                 self.finished_at.isoformat() if self.finished_at else None
             )
         return json.dumps(data)
-
-    def to_metadata(self):
-        # deprecated: metadata is associated with document
-        """将任务转换为元数据（委托给 Document）"""
-        return self.document.to_metadata()
-
-    # TODO: use pydantic to validate if input task_type is registered
-    def validate(self):
-        pass

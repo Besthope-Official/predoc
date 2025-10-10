@@ -96,7 +96,7 @@ class TaskConsumer(RabbitMQBase):
             default_collection = (
                 getattr(task, "destination_collection", None)
                 or self.collection_name
-                or MilvusConfig().default_collection_name
+                or MilvusConfig.from_yaml().default_collection_name
             )
             logger.info(f"destination_collection: {default_collection}")
             # get_pipeline returns a Pipeline class; instantiate it here

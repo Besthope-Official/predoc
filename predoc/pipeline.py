@@ -13,6 +13,8 @@ from predoc.embedding import EmbeddingModel
 from task.oss import download_file, check_file_exists
 from config.backend import OSSConfig
 
+_oss_config = OSSConfig.from_yaml()
+
 
 class BasePipeline(ABC):
     """
@@ -80,7 +82,7 @@ class DefaultPDFPipeline(BasePipeline):
             temp_dir.mkdir(parents=True, exist_ok=True)
             local_text_path = temp_dir / "text.txt"
             download_file(
-                parsed_text_obj, local_text_path, OSSConfig.preprocessed_files_bucket
+                parsed_text_obj, local_text_path, _oss_config.preprocessed_files_bucket
             )
             text = local_text_path.read_text(encoding="utf-8")
 
@@ -112,7 +114,7 @@ class DefaultPDFPipeline(BasePipeline):
             file_name if "/" not in file_name else file_name.split("/")[-1]
         )
 
-        download_file(file_name, local_pdf, doc_bucket or OSSConfig.pdf_bucket)
+        download_file(file_name, local_pdf, doc_bucket or _oss_config.pdf_bucket)
 
         processor = PDFProcessor(
             chunker=(

@@ -17,6 +17,8 @@ from .utils import clean_text
 from .model import init_model
 from config.model import CONFIG
 
+_oss_config = OSSConfig.from_yaml()
+
 
 class Parser(ABC):
     """文档解析器基类"""
@@ -75,7 +77,7 @@ class Parser(ABC):
         upload_result = upload_file(
             file_path=Path(save_path),
             object_name=object_name,
-            bucket_name=OSSConfig.preprocessed_files_bucket,
+            bucket_name=_oss_config.preprocessed_files_bucket,
         )
         logger.debug(f"upload to {upload_result}")
 
@@ -156,7 +158,7 @@ class YoloParser(Parser):
 
         cv_img = cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
         det_res = self.model.predict(
-            str(temp_img_path), imgsz=1024, conf=0.25, device=CONFIG.DEVICE
+            str(temp_img_path), imgsz=1024, conf=0.25, device=CONFIG.device
         )
         results = det_res[0]
 
@@ -165,7 +167,7 @@ class YoloParser(Parser):
         sorted_boxes = sorted(results.boxes.data.tolist(), key=lambda x: x[1])
 
         for box in sorted_boxes:
-            x1, y1, x2, y2, conf, cls = map(int, box[:6])
+            x1, y1, x2, y2, _conf, cls = map(int, box[:6])
             crop_img = cv_img[y1:y2, x1:x2]
 
             element_type = self._get_element_type(cls)
@@ -221,7 +223,7 @@ class YoloParser(Parser):
         paper_title = os.path.splitext(os.path.basename(file_path))[0]
         paper_output_dir = Path(output_dir) / paper_title
         (
-            text_dir,
+            _text_dir,
             formulas_dir,
             figures_dir,
             tables_dir,
@@ -296,10 +298,3 @@ class YoloParser(Parser):
         return pytesseract.image_to_string(
             gray, lang="chi_sim+eng", config="--psm 6 --oem 3"
         )
-
-
-# 为了向后兼容，保留旧接口
-class PDFParser(YoloParser):
-    """PDF解析器的别名，向后兼容"""
-
-    pass

@@ -8,6 +8,8 @@ from task.milvus import search_embedding
 from api.utils import ModelLoader
 from config.backend import OSSConfig
 
+_oss_config = OSSConfig.from_yaml()
+
 
 def generate_image_url(title: str, element_type: str, idx: int) -> str:
     """
@@ -21,8 +23,8 @@ def generate_image_url(title: str, element_type: str, idx: int) -> str:
     """
     object_name = f"{title}/{element_type}_{idx}.png"
     url = urljoin(
-        f"http://{OSSConfig.endpoint}",
-        f"{OSSConfig.preprocessed_files_bucket}/{object_name}",
+        f"http://{_oss_config.endpoint}",
+        f"{_oss_config.preprocessed_files_bucket}/{object_name}",
     )
     return url
 

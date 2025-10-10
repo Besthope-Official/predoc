@@ -1,22 +1,23 @@
 """LLM API相关配置"""
 
 import os
+from typing import ClassVar
+from pydantic import Field
+from .base import BaseConfig
 
 
-class OpenAIConfig:
-    """OpenAI API配置"""
+class ChunkAPIConfig(BaseConfig):
+    """分块用 LLM API 配置"""
 
-    MODEL_NAME: str
-    API_KEY: str
-    API_URL: str
-    # Suppose API has no QPS limit
-    MAX_QPS: int = 50
+    yaml_section: ClassVar[str] = "models.chunking"
 
-
-class ChunkAPIConfig(OpenAIConfig):
-    """分块用LLM API配置"""
-
-    MODEL_NAME: str = os.getenv("CHUNK_MODEL_NAME", "moonshot-v1-8k")
-    API_KEY: str = os.getenv("CHUNK_API_KEY", "your_openai_api_key")
-    API_URL: str = os.getenv("CHUNK_API_URL", "http://127.0.0.1:8000")
-    MAX_QPS: int = int(os.getenv("CHUNK_MAX_QPS", 50))
+    model_name: str = Field(
+        default_factory=lambda: os.getenv("CHUNK_MODEL_NAME", "moonshot-v1-8k")
+    )
+    api_key: str = Field(
+        default_factory=lambda: os.getenv("CHUNK_API_KEY", "your_openai_api_key")
+    )
+    api_url: str = Field(
+        default_factory=lambda: os.getenv("CHUNK_API_URL", "http://127.0.0.1:8000")
+    )
+    max_qps: int = Field(default_factory=lambda: int(os.getenv("MAX_CHUNK_QPS", "50")))

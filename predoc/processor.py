@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 from loguru import logger
 
-from config.model import ModelConfig
+from config.model import CONFIG
 from .chunker import Chunker
 from .parser import Parser, YoloParser
 from .embedding import EmbeddingModel
@@ -12,14 +12,14 @@ from .error import ParseResultEmptyException
 
 
 class Processor(ABC):
-    BASE_EMBD_MODEL = ModelConfig.EMBEDDING_MODEL
+    BASE_EMBD_MODEL = CONFIG.embedding_model
 
     def __init__(
         self,
         chunker: Chunker,
         parser: Parser = None,
         embedder: EmbeddingModel = None,
-        output_dir: str = ModelConfig.CHUNK_OUTPUT_DIR,
+        output_dir: str = None,
         upload_to_oss: bool = True,
         enable_parallel_processing: bool = False,
         max_workers: Optional[int] = None,
@@ -39,7 +39,9 @@ class Processor(ABC):
         self.chunker = chunker
         self.parser = parser if parser is not None else YoloParser()
         self.embedder = embedder if embedder is not None else EmbeddingModel()
-        self.output_dir = output_dir
+        self.output_dir = (
+            output_dir if output_dir is not None else CONFIG.chunk_output_dir
+        )
         self.upload_to_oss = upload_to_oss
         self.enable_parallel_processing = enable_parallel_processing
         self.max_workers = max_workers
@@ -126,7 +128,7 @@ class PDFProcessor(Processor):
         chunker: Chunker = None,
         parser: Parser = None,
         embedder: EmbeddingModel = None,
-        output_dir: str = ModelConfig.CHUNK_OUTPUT_DIR,
+        output_dir: str = None,
         upload_to_oss: bool = True,
         enable_parallel_processing: bool = False,
         max_workers: Optional[int] = None,

@@ -13,6 +13,8 @@ from .oss import upload_file
 from .mq import RabbitMQBase
 import pika
 
+_oss_config = OSSConfig.from_yaml()
+
 
 class TaskProducer(RabbitMQBase):
     """
@@ -101,7 +103,7 @@ class PDFTaskPublisher(TaskProducer):
         """遍历给定的文件/目录集合，查找所有 PDF 文件，构建并发布任务。
         - task_type: 任务类型（将写入 Task.task_type）
         - upload_to_oss: 若为 True，则先将本地 PDF 上传至 OSS 的 pdf_bucket
-        - oss_bucket: 覆盖上传目标 bucket，默认为 OSSConfig.pdf_bucket
+        - oss_bucket: 覆盖上传目标 bucket，默认为配置文件中的 pdf_bucket
         - oss_object_prefix: 上传到 OSS 的对象名前缀（如 "incoming/"）
         """
 
@@ -116,7 +118,7 @@ class PDFTaskPublisher(TaskProducer):
                         yield p
 
         published = 0
-        bucket = oss_bucket or OSSConfig.pdf_bucket
+        bucket = oss_bucket or _oss_config.pdf_bucket
         prefix = (oss_object_prefix or "").strip("/")
         for pdf in iter_all_pdfs(pdf_paths):
             obj_name = f"{prefix}/{pdf.name}" if prefix else pdf.name

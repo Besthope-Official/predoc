@@ -9,8 +9,9 @@ import json
 import re
 
 _milvus_client = None
-_default_collection_name = MilvusConfig.default_collection_name
-_default_partition_name = MilvusConfig.default_partition_name
+_milvus_config = MilvusConfig.from_yaml()
+_default_collection_name = _milvus_config.default_collection_name
+_default_partition_name = _milvus_config.default_partition_name
 
 
 def _get_milvus_client() -> MilvusClient:
@@ -20,7 +21,7 @@ def _get_milvus_client() -> MilvusClient:
     global _milvus_client
 
     if _milvus_client is None:
-        config = MilvusConfig()
+        config = MilvusConfig.from_yaml()
 
         uri = f"http://{config.host}:{config.port}"
 
@@ -176,8 +177,8 @@ def store_embedding_task(
             embedding,
             chunk_text,
             metadata_list,
-            collection_name or MilvusConfig.default_collection_name,
-            partition_name or MilvusConfig.default_partition_name,
+            collection_name or _default_collection_name,
+            partition_name or _default_partition_name,
         )
 
     except Exception as e:
