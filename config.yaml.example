@@ -1,0 +1,209 @@
+# =============================================================================
+# PreDoc 项目配置文件示例 (YAML Format)
+# =============================================================================
+# 使用说明:
+#   1. 复制此文件为 config.yaml: cp config.yaml.example config.yaml
+#   2. 根据实际环境修改配置项 (特别是标记为 [REQUIRED] 的项)
+#   3. 敏感信息可通过环境变量覆盖 (环境变量优先级更高)
+#
+# 优先级: 环境变量 > config.yaml > 默认值
+
+# -----------------------------------------------------------------------------
+# 项目核心配置 (Project Core Configuration)
+# -----------------------------------------------------------------------------
+app:
+  # 运行环境 (dev/test/prod)
+  env: dev
+
+  # 运行模式 [REQUIRED]
+  # false: API 服务器模式 (同步请求/响应)
+  # true: RabbitMQ 消费者模式 (异步任务队列)
+  enable_message_queue: false
+
+  # 是否启用并行处理 (加速文本分块)
+  enable_parallelism: true
+
+  # 解析方法 (auto 自动选择, yolo 强制使用 YOLO)
+  parse_method: auto
+
+  # 分块策略 (semantic_api: LLM分块, sentence: 句子分块)
+  chunk_strategy: semantic_api
+
+# -----------------------------------------------------------------------------
+# 服务器配置 (Server Configuration)
+# -----------------------------------------------------------------------------
+server:
+  # API 服务器监听地址
+  host: 0.0.0.0
+  port: 8000
+
+  # 工作进程数 (建议: CPU 核心数)
+  workers: 1
+
+  # 是否启用自动重载 (仅开发环境使用)
+  reload: false
+
+# -----------------------------------------------------------------------------
+# 消息队列配置 (Message Queue Configuration)
+# -----------------------------------------------------------------------------
+# 仅在 enable_message_queue=true 时需要配置
+rabbitmq:
+  # [REQUIRED] RabbitMQ 服务器地址
+  host: localhost
+
+  # RabbitMQ 端口
+  port: 5672
+
+  # [REQUIRED] RabbitMQ 认证
+  user: admin
+  password: admin
+
+  # 队列名称
+  task_queue: taskQueue
+  result_queue: respQueue
+
+  # 消费者工作线程数
+  consumer_workers: 4
+
+# -----------------------------------------------------------------------------
+# 向量数据库配置 (Vector Database Configuration)
+# -----------------------------------------------------------------------------
+milvus:
+  # [REQUIRED] Milvus 服务器地址
+  host: localhost
+  port: 19530
+
+  # [REQUIRED] Milvus 认证
+  user: root
+  password: Milvus
+
+  # Milvus 数据库和集合配置
+  db_name: default
+  default_collection: default_collection
+  default_partition: default_partition
+
+# -----------------------------------------------------------------------------
+# 对象存储配置 (Object Storage Configuration - MinIO)
+# -----------------------------------------------------------------------------
+# 仅在 enable_message_queue=true 时需要配置
+minio:
+  # [REQUIRED] MinIO 服务器地址 (包含端口)
+  # 示例: http://localhost:9000
+  endpoint: http://localhost:9000
+
+  # [REQUIRED] MinIO 认证
+  access_key: minioadmin
+  secret_key: minioadmin
+
+  # 存储桶配置
+  preprocessed_files_bucket: prep  # 解析后文件存储桶
+  pdf_bucket: mybucket             # 原始 PDF 存储桶
+
+  # 是否使用 HTTPS (生产环境建议启用)
+  secure: false
+
+# -----------------------------------------------------------------------------
+# AI 模型配置 (AI Model Configuration)
+# -----------------------------------------------------------------------------
+models:
+  # 分块模型配置 (LLM API)
+  chunking:
+    # [REQUIRED for semantic_api] LLM API 配置
+    # 支持 OpenAI 兼容 API (如 Moonshot, DeepSeek, Ollama 等)
+    api_key: sk-your-api-key-here
+    api_url: https://api.openai.com/v1
+    model_name: gpt-3.5-turbo
+
+    # 最大请求频率限制 (QPS)
+    max_qps: 10
+
+    # 常用 API 配置示例:
+    # Moonshot AI:
+    #   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    #   api_url: https://api.moonshot.cn/v1
+    #   model_name: moonshot-v1-auto
+    #
+    # DeepSeek:
+    #   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+    #   api_url: https://api.deepseek.com/v1
+    #   model_name: deepseek-chat
+    #
+    # Ollama (本地部署):
+    #   api_key: ollama
+    #   api_url: http://localhost:11434/v1
+    #   model_name: llama2
+
+  # 嵌入模型配置
+  embedding:
+    # [REQUIRED] 嵌入模型名称 (sentence-transformers 格式)
+    # 常用模型:
+    #   - paraphrase-multilingual-mpnet-base-v2 (多语言, 推荐)
+    #   - text-embedding-3-small (OpenAI, 需要 API)
+    model_name: paraphrase-multilingual-mpnet-base-v2
+
+  # YOLO 文档布局检测模型
+  yolo:
+    # YOLO 模型路径 (相对于项目根目录)
+    model_path: models/YOLOv10/doclayout_yolo_docstructbench_imgsz1024.pt
+
+    # 推理设备 (cpu/cuda/mps)
+    # cpu: 通用 CPU
+    # cuda: NVIDIA GPU
+    # mps: Apple Silicon GPU
+    device: cpu
+
+    # YOLO 推理参数
+    image_size: 1024
+    confidence: 0.25
+
+# -----------------------------------------------------------------------------
+# 文本处理配置 (Text Processing Configuration)
+# -----------------------------------------------------------------------------
+text_processing:
+  # 分块长度限制 (字符数)
+  min_chunk_length: 100
+  max_chunk_length: 2048
+  chunk_size: 1024
+  chunk_overlap: 128
+
+# -----------------------------------------------------------------------------
+# 日志配置 (Logging Configuration)
+# -----------------------------------------------------------------------------
+logging:
+  # 日志级别 (DEBUG/INFO/WARNING/ERROR/CRITICAL)
+  level: INFO
+
+  # 日志格式 (使用 loguru 格式)
+  format: "<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>"
+
+  # 是否输出到文件
+  file_enabled: false
+
+  # 日志文件配置 (file_enabled=true 时生效)
+  file_path: logs/predoc.log
+  rotation: 10  # 轮转大小 (MB)
+  retention: 30 # 保留时间 (天)
+
+# =============================================================================
+# 高级配置 (Advanced Configuration)
+# =============================================================================
+
+# 多环境配置示例
+# 您可以创建多个配置文件:
+#   - config_dev.yaml   (开发环境)
+#   - config_test.yaml  (测试环境)
+#   - config_prod.yaml  (生产环境)
+# 然后通过环境变量指定: export CONFIG_FILE=config_prod.yaml
+
+# 环境变量覆盖示例:
+# export MILVUS_HOST=prod-milvus.example.com
+# export MINIO_ENDPOINT=https://prod-minio.example.com:9000
+# export CHUNK_API_KEY=sk-production-key-xxxxxxxx
+
+# Docker 部署示例:
+# docker run \
+#   -v $(pwd)/config.yaml:/app/config.yaml \
+#   -e MILVUS_HOST=milvus-service \
+#   -e MINIO_ENDPOINT=http://minio-service:9000 \
+#   -p 8000:8000 \
+#   predoc:latest
