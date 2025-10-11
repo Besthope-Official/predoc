@@ -180,7 +180,9 @@ cython_debug/
 # Output file
 /output
 /data
+/.store
 /AI预实验文献
+/测评文献知识库
 /examples
 
 # Models

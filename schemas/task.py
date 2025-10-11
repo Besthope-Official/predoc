@@ -1,6 +1,6 @@
 """任务数据模型"""
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import Optional
 from enum import Enum
 from uuid import UUID
@@ -36,6 +36,16 @@ class Task(BaseModel):
     created_at: datetime = Field(alias="createdAt")
     processed_at: Optional[datetime] = Field(alias="processedAt", default=None)
     finished_at: Optional[datetime] = Field(alias="finishedAt", default=None)
+    # in PIPELINE_REGISTRY
+    task_type: str = Field(alias="taskType", default="default")
+    # optional destination collection hint from producer
+    destination_collection: Optional[str] = Field(
+        alias="destinationCollection", default=None
+    )
+
+    # Backward compatibility (if any additional field)
+    # Accept population by both field name (e.g., task_id) and alias (e.g., taskId)
+    model_config = ConfigDict(extra="ignore", populate_by_name=True)
 
     @classmethod
     def from_json(cls, json_str):
@@ -65,18 +75,3 @@ class Task(BaseModel):
                 self.finished_at.isoformat() if self.finished_at else None
             )
         return json.dumps(data)
-
-    def to_metadata(self):
-        """将任务转换为元数据"""
-        metadata = {
-            "authors": [author.to_dict() for author in self.document.authors],
-            "keywords": [keyword.to_dict() for keyword in self.document.keywords],
-            "title": self.document.title,
-            "publicationDate": (
-                self.document.publicationDate.isoformat()
-                if self.document.publicationDate
-                else None
-            ),
-            "language": self.document.language,
-        }
-        return metadata

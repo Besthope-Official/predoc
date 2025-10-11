@@ -3,7 +3,7 @@ from typing import Optional
 import numpy as np
 from loguru import logger
 
-from config.model import ModelConfig
+from config.model import CONFIG
 from .chunker import Chunker
 from .parser import Parser, YoloParser
 from .embedding import EmbeddingModel
@@ -12,15 +12,14 @@ from .error import ParseResultEmptyException
 
 
 class Processor(ABC):
-    BASE_EMBD_MODEL = ModelConfig.EMBEDDING_MODEL
+    BASE_EMBD_MODEL = CONFIG.embedding_model
 
     def __init__(
         self,
         chunker: Chunker,
         parser: Parser = None,
         embedder: EmbeddingModel = None,
-        output_dir: str = ModelConfig.CHUNK_OUTPUT_DIR,
-        upload_to_oss: bool = True,
+        output_dir: str = None,
         enable_parallel_processing: bool = False,
         max_workers: Optional[int] = None,
     ):
@@ -32,15 +31,15 @@ class Processor(ABC):
             parser: 解析器实例，默认使用YoloParser()
             embedder: 嵌入模型实例，默认使用EmbeddingModel()
             output_dir: 输出目录
-            upload_to_oss: 是否上传到OSS
             enable_parallel_processing: 是否启用并行处理
             max_workers: 最大工作线程数，None时自动计算
         """
         self.chunker = chunker
         self.parser = parser if parser is not None else YoloParser()
         self.embedder = embedder if embedder is not None else EmbeddingModel()
-        self.output_dir = output_dir
-        self.upload_to_oss = upload_to_oss
+        self.output_dir = (
+            output_dir if output_dir is not None else CONFIG.chunk_output_dir
+        )
         self.enable_parallel_processing = enable_parallel_processing
         self.max_workers = max_workers
         logger.info(
@@ -62,9 +61,7 @@ class Processor(ABC):
 
     def parse(self, file_path: str) -> str:
         """解析文档，提取文本，使用初始化时指定的parser"""
-        text = self.parser.parse(
-            file_path, self.output_dir, upload_to_oss=self.upload_to_oss
-        )
+        text = self.parser.parse(file_path, self.output_dir)
 
         if not text.strip():
             raise ParseResultEmptyException("提取文本为空")
@@ -126,8 +123,7 @@ class PDFProcessor(Processor):
         chunker: Chunker = None,
         parser: Parser = None,
         embedder: EmbeddingModel = None,
-        output_dir: str = ModelConfig.CHUNK_OUTPUT_DIR,
-        upload_to_oss: bool = True,
+        output_dir: str = None,
         enable_parallel_processing: bool = False,
         max_workers: Optional[int] = None,
     ):
@@ -139,7 +135,6 @@ class PDFProcessor(Processor):
             parser: 解析器实例，默认使用YoloParser()
             embedder: 嵌入模型实例，默认使用EmbeddingModel()
             output_dir: 输出目录
-            upload_to_oss: 是否上传到OSS
             enable_parallel_processing: 是否启用并行处理
             max_workers: 最大工作线程数
         """
@@ -148,7 +143,6 @@ class PDFProcessor(Processor):
             parser,
             embedder,
             output_dir,
-            upload_to_oss,
             enable_parallel_processing,
             max_workers,
         )

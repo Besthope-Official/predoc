@@ -8,6 +8,8 @@ from task.milvus import search_embedding
 from api.utils import ModelLoader
 from config.backend import OSSConfig
 
+_oss_config = OSSConfig.from_yaml()
+
 
 def generate_image_url(title: str, element_type: str, idx: int) -> str:
     """
@@ -21,19 +23,22 @@ def generate_image_url(title: str, element_type: str, idx: int) -> str:
     """
     object_name = f"{title}/{element_type}_{idx}.png"
     url = urljoin(
-        f"http://{OSSConfig.endpoint}",
-        f"{OSSConfig.preprocessed_files_bucket}/{object_name}",
+        f"http://{_oss_config.endpoint}",
+        f"{_oss_config.preprocessed_files_bucket}/{object_name}",
     )
     return url
 
 
-def retrieve_documents(query: str, k: int = 50) -> Dict[str, List[Dict[str, Any]]]:
+def retrieve_documents(
+    query: str, k: int = 50, collection: str = "default_collection"
+) -> Dict[str, List[Dict[str, Any]]]:
     """
     从Milvus中检索文档
 
     Args:
         query: 查询字符串
         k: 返回结果数量
+        collection: 查询的 collection 名称，默认全部 collection 在同一 Milvus 数据库下
 
     Returns:
         处理后的检索结果字典，包含去重后的文档和文本块列表
@@ -41,7 +46,7 @@ def retrieve_documents(query: str, k: int = 50) -> Dict[str, List[Dict[str, Any]
     model_loader = ModelLoader()
     embedder = model_loader.embedder
     embd = embedder.generate_embedding(query)
-    raw_results = search_embedding(embd, k)
+    raw_results = search_embedding(embd, k, collection)
 
     docs = []
     chunks = []

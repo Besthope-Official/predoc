@@ -11,9 +11,12 @@ from openai import OpenAI
 
 from config.model import CONFIG
 from config.api import ChunkAPIConfig
-from config.app import Config
+from config.app import AppConfig
 from .prompt import CHUNK_SYSTEM_PROMPT_TEMPLATE, CHUNK_PROMPT_TEMPLATE
 from .utils import TextSplitter, extract_markers, reconstruct_chunks
+
+_app_config = AppConfig.from_yaml()
+_chunk_api_config = ChunkAPIConfig.from_yaml()
 
 
 class Chunker(ABC):
@@ -25,7 +28,7 @@ class Chunker(ABC):
             self.num_workers = self._get_optimal_worker_count()
 
     def split_text(self, text: str) -> List[str]:
-        """Base method to split text into desired chunks. Text MAX_LENGTH is constrained by `CONFIG.CHUNK_SIZE`."""
+        """Base method to split text into desired chunks. Text MAX_LENGTH is constrained by `CONFIG.chunk_size`."""
         raise NotImplementedError("chunk method not implemented")
 
     @staticmethod
@@ -55,7 +58,7 @@ class Chunker(ABC):
         Args:
             text: The text to be chunked. Text will first be split into smaller sections, then call `split_text` to split each section into chunks.
         """
-        if len(text) < CONFIG.MIN_CHUNK_LENGTH:
+        if len(text) < CONFIG.min_chunk_length:
             return []
 
         markers, pages, clean_text = extract_markers(text)
@@ -75,7 +78,9 @@ class Chunker(ABC):
 class SentenceChunker(Chunker):
     """使用简单的基于句子的方法创建语义块"""
 
-    def __init__(self, enable_parallelism: bool = Config.ENABLE_PARALLELISM):
+    def __init__(self, enable_parallelism: bool = None):
+        if enable_parallelism is None:
+            enable_parallelism = _app_config.enable_parallelism
         super().__init__(enable_parallelism=enable_parallelism)
 
     def split_text(self, text: str) -> List[str]:
@@ -110,10 +115,10 @@ class LLMChunker(Chunker):
         self,
         backend="api",
         ollama_api_host="http://127.0.0.1:11434",
-        model_name=ChunkAPIConfig.MODEL_NAME,
-        api_base=ChunkAPIConfig.API_URL,
-        api_key=ChunkAPIConfig.API_KEY,
-        enable_parallelism=Config.ENABLE_PARALLELISM,
+        model_name=None,
+        api_base=None,
+        api_key=None,
+        enable_parallelism=None,
     ):
         """Initialize the LLMChunker with specified backend and API configurations.
 
@@ -123,16 +128,22 @@ class LLMChunker(Chunker):
             ollama_api_host: The host URL for the Ollama API.
                 Defaults to `http://127.0.0.1:11434`.
             model_name: The name of the LLM model to use.
-                Defaults to `ChunkAPIConfig.MODEL_NAME`.
             api_base: The base URL for the OpenAI-compatible API.
-                Defaults to `ChunkAPIConfig.API_URL`.
             api_key: The API key for the OpenAI-compatible API.
-                Defaults to `ChunkAPIConfig.API_KEY`.
-            enable_parallelism: Use multi-threading for chunking. Defaults to `False`.
+            enable_parallelism: Use multi-threading for chunking.
         """
+        if model_name is None:
+            model_name = _chunk_api_config.model_name
+        if api_base is None:
+            api_base = _chunk_api_config.api_url
+        if api_key is None:
+            api_key = _chunk_api_config.api_key
+        if enable_parallelism is None:
+            enable_parallelism = _app_config.enable_parallelism
+
         super().__init__(enable_parallelism=enable_parallelism)
         if enable_parallelism:
-            self.num_workers = min(self.num_workers, ChunkAPIConfig.MAX_QPS)
+            self.num_workers = min(self.num_workers, _chunk_api_config.max_qps)
         self.model_name = model_name
         logger.debug(f"Using {self.model_name} as chunker LLM...")
         self.backend = backend
@@ -144,9 +155,7 @@ class LLMChunker(Chunker):
 
     @staticmethod
     def _remove_thinking(text: str) -> str:
-        """
-        对于推理系大模型, 输出如 `<think><Thinking Process></think>\n<Answer>`, 仅保留 `<Answer>` 部分
-        """
+        """移除推理模型的 <think> 标签"""
         cleaned_text = re.sub(r"(?i)<think>.*?</think>", "", text, flags=re.DOTALL)
         cleaned_text = re.sub(r"\n\s*\n", "\n\n", cleaned_text)
         cleaned_text = cleaned_text.lstrip()
@@ -155,12 +164,10 @@ class LLMChunker(Chunker):
 
     @staticmethod
     def create_sentence_chunks(text: str) -> List[str]:
-        """使用简单的基于句子的方法创建语义块"""
-        logger.debug("使用备选分块方法...")
-
+        """回退方法：使用基于句子的简单分块"""
+        logger.debug("使用备选分块方法")
         chunker = SentenceChunker()
         chunks = chunker.split_text(text)
-
         logger.debug(f"备选方法生成了 {len(chunks)} 个语义块")
         return chunks
 
@@ -196,11 +203,6 @@ class LLMChunker(Chunker):
         if len(text) < 100:
             return [text]
 
-        # Note, if one of the following conditions met:
-        # 1. Ollama failed (e.g. ollama API request failed, specified model not found, etc.),
-        # 2. result_chunks <= 1,
-        # 3. LLM-based chunk performance is bad,
-        # rule-based chunker (create_sentence_chunks) will be used.
         prompt = CHUNK_PROMPT_TEMPLATE.format(text=text, text_length=len(text))
 
         try:
@@ -209,9 +211,6 @@ class LLMChunker(Chunker):
             elif self.backend == "api":
                 response = self._call_open_api(prompt, CHUNK_SYSTEM_PROMPT_TEMPLATE)
 
-            # In case of using reasoning model
-            # It's not recommended to use reasoning model(e.g. Deepseek-R1) for chunking,
-            # as it requires more **TIME** and **TOKEN COST**
             cleaned_text = self._remove_thinking(response)
 
             result_chunks = [
@@ -223,16 +222,12 @@ class LLMChunker(Chunker):
             if len(result_chunks) <= 1:
                 logger.warning("LLM只生成了一个块或返回空结果，使用备选分块方法")
                 return self.create_sentence_chunks(text)
-
-            # In case of LLM adds or removes some content unexpectedly
             reconstructed_text = "".join([chunk.strip() for chunk in result_chunks])
             original_text = text.strip()
             similarity_ratio = (
                 len(reconstructed_text) / len(original_text) if original_text else 0
             )
 
-            # ratio of 0.95-1.05 is considered acceptable
-            # NO RETRY, use second choice for convenience
             if similarity_ratio < 0.95 or similarity_ratio > 1.05:
                 logger.warning(
                     f"分块内容与原文不匹配 (原文长度：{len(original_text)} 分块后：{len(reconstructed_text)} 相似度比例: {similarity_ratio:.4f})"

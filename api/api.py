@@ -14,9 +14,9 @@ from functools import lru_cache
 from predoc.processor import PDFProcessor
 from retrieve.search import retrieve_documents
 from .utils import ModelLoader, api_success, api_fail, ApiResponse
-from task.task import TaskConsumer
+from task.consumer import TaskConsumer
 from config.backend import RabbitMQConfig
-from config.app import Config
+from config.app import AppConfig
 
 
 @lru_cache()
@@ -28,7 +28,7 @@ def get_model_loader() -> ModelLoader:
 @lru_cache()
 def get_task_consumer() -> TaskConsumer:
     """获取任务消费者单例"""
-    config = RabbitMQConfig()
+    config = RabbitMQConfig.from_yaml()
     return TaskConsumer(config)
 
 
@@ -48,8 +48,9 @@ async def lifespan(app: FastAPI):
     model_loader = get_model_loader()
     model_loader.preload_all()
 
+    app_config = AppConfig.from_yaml()
     consumer_thread = None
-    if Config.ENABLE_MASSAGE_QUEUE:
+    if app_config.enable_message_queue:
         logger.info("消息队列已启用，初始化任务消费者...")
         consumer = get_task_consumer()
 
@@ -94,14 +95,16 @@ async def get_processor(
     model_loader: Annotated[ModelLoader, Depends(get_model_loader)],
     temp_dir: str,
 ) -> PDFProcessor:
-    """获取文档处理器"""
+    """获取文档处理器
+
+    Note: API 模式不上传到 OSS,parser.storage 默认为 None
+    """
     chunker = model_loader.get_chunker(chunker_strategy)
     return PDFProcessor(
         chunker=chunker,
         parser=model_loader.parser,
         embedder=model_loader.embedder,
         output_dir=temp_dir,
-        upload_to_oss=True,
     )
 
 
@@ -215,10 +218,11 @@ async def text_embedding(
 async def document_retrieval(
     query: str = Body(...),
     topK: int = Body(5),
+    collection: str = Body("default_collection"),
 ) -> ApiResponse:
     """接收查询字符串，返回检索到的文档列表"""
     try:
-        results = retrieve_documents(query, k=topK)
+        results = retrieve_documents(query, k=topK, collection=collection)
         response_data = {"doc": results["docs"], "chunks": results["chunks"]}
 
         return api_success(data=response_data)

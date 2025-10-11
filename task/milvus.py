@@ -2,16 +2,16 @@
 提供milvus向量数据库的插入和查询功能
 """
 
-from typing import List
+from typing import List, Union
 from pymilvus import MilvusClient, DataType
 from config.backend import MilvusConfig
-from schemas import Task
 import json
 import re
 
 _milvus_client = None
-_default_collection_name = MilvusConfig.default_collection_name
-_default_partition_name = MilvusConfig.default_partition_name
+_milvus_config = MilvusConfig.from_yaml()
+_default_collection_name = _milvus_config.default_collection_name
+_default_partition_name = _milvus_config.default_partition_name
 
 
 def _get_milvus_client() -> MilvusClient:
@@ -21,7 +21,7 @@ def _get_milvus_client() -> MilvusClient:
     global _milvus_client
 
     if _milvus_client is None:
-        config = MilvusConfig()
+        config = MilvusConfig.from_yaml()
 
         uri = f"http://{config.host}:{config.port}"
 
@@ -140,7 +140,7 @@ def _store_embedding(
                 "page": page,
             }
             data.append(tmp)
-
+        print("collection name:", collection_name)
         client.insert(
             collection_name=collection_name, partition_name=partition_name, data=data
         )
@@ -148,17 +148,37 @@ def _store_embedding(
         raise RuntimeError(f"插入数据失败 of store_embedding: {e}")
 
 
-def store_embedding_task(embedding: list, chunk_text: list, task: Task) -> None:
+def store_embedding_task(
+    embedding: list,
+    chunk_text: list,
+    metadata: Union[dict, List[dict]],
+    collection_name: str = None,
+    partition_name: str = None,
+) -> None:
+    """将向量数据入库。
+
+    Args:
+        embedding: 向量列表，与 chunk_text 一一对应
+        chunk_text: 文本分块列表
+        metadata: 元数据（字典或与 embedding 等长的字典列表）
+    """
     try:
-        metadata_json = task.to_metadata()
-        if metadata_json is None:
-            raise ValueError("文档数据不能为空")
+        if not isinstance(metadata, list):
+            metadata_list = [metadata] * len(embedding)
+        else:
+            metadata_list = metadata
+
+        if len(embedding) != len(chunk_text):
+            raise ValueError("embedding 与 chunk_text 长度不一致")
+        if len(metadata_list) != len(embedding):
+            raise ValueError("metadata 数量需与 embedding 数量一致")
+
         _store_embedding(
             embedding,
             chunk_text,
-            [metadata_json] * len(embedding),
-            MilvusConfig.default_collection_name,
-            MilvusConfig.default_partition_name,
+            metadata_list,
+            collection_name or _default_collection_name,
+            partition_name or _default_partition_name,
         )
 
     except Exception as e:

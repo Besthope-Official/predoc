@@ -1,10 +1,10 @@
 # Predoc
 
-Preprocess document service for RAG (Retriveal Augumented Generation)
+Preprocess document service for RAG (Retrieval Augmented Generation)
 
 ## Usage
 
-### Dev Env setup
+### Dev Environment Setup
 
 We recommend you use `conda` to isolate RAG environment, then install dependencies via `pip`:
 
@@ -53,13 +53,63 @@ We provide CPU/GPU Docker images to suit different deployment needs. See [Docker
 
 We suggest you use CPU version as it not only provides smaller image size but also almost same performance (yolo-parsing and embedding will not be bottleneck).
 
-## Getting started
+## Getting Started
 
-1. Use API as a tool
+### 1. Configure the Service
 
-check `/docs` for API documentation.
+Copy the example configuration and edit required fields:
 
-2. Use RabbitMQ as a task consumer
+```bash
+cp config.yaml.example config.yaml
+# Edit config.yaml with your settings
+```
+
+See **[Configuration Guide](CONFIGURATION.md)** for detailed configuration reference.
+
+### 2. Choose Operation Mode
+
+**API Server Mode** (synchronous):
+```bash
+# config.yaml
+app:
+  enable_message_queue: false
+
+# Start server
+python run.py
+```
+
+Access API documentation at `http://localhost:8000/docs`
+
+**Task Consumer Mode** (asynchronous with RabbitMQ):
+```bash
+# config.yaml
+app:
+  enable_message_queue: true
+
+# Start consumer
+python run.py
+```
+
+## Configuration
+
+The service uses YAML-based configuration with environment variable override support.
+
+📖 **[Full Configuration Guide](CONFIGURATION.md)** - Detailed reference with all available options
+
+**Quick Setup:**
+```bash
+# 1. Copy example configuration
+cp config.yaml.example config.yaml
+
+# 2. Edit required fields (see CONFIGURATION.md)
+vim config.yaml
+
+# 3. Or use environment variables
+export MILVUS_HOST=localhost
+export CHUNK_API_KEY=sk-your-api-key
+```
+
+**Configuration Priority:** Environment Variables > config.yaml > Defaults
 
 ## Supported features
 
@@ -69,5 +119,6 @@ check `/docs` for API documentation.
 
 ## TODOs
 
-- paddleocr support
--
+- [ ] paddleocr support
+- [ ] batch-processing for PDF parsing
+- [ ] yolo model/chunk LLM upgrade

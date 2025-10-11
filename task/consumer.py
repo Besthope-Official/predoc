@@ -1,17 +1,20 @@
-"""消费文档预处理的任务"""
+"""任务消费者：消费 MQ 任务，运行 Pipeline 并入库，发布任务状态"""
 
+from __future__ import annotations
 from datetime import datetime
-from typing import Optional
 from concurrent.futures import ThreadPoolExecutor
-import pika
 from loguru import logger
+import pika
 
-from config.backend import RabbitMQConfig
-from task.preprocess import preprocess
+from config.backend import RabbitMQConfig, MilvusConfig
 from schemas import TaskStatus, Task
+from api.utils import ModelLoader
+from predoc.pipeline import get_pipeline
+from predoc.storage import MinioStorage
+from .mq import RabbitMQBase
 
 
-class TaskConsumer:
+class TaskConsumer(RabbitMQBase):
     """
     Consumer class for RabbitMQ document-preprocess tasks.
     Also producer of task result to provide task status for TaskProducer to persist (save to e.g. postgresql).
@@ -20,38 +23,33 @@ class TaskConsumer:
     def __init__(
         self,
         config: RabbitMQConfig,
-        queue_name: str = "taskQueue",
-        result_queue_name: str = "respQueue",
+        queue_name: str | None = None,
+        result_queue_name: str | None = None,
+        collection_name: str | None = None,
+        partition_name: str | None = None,
     ) -> None:
-        self.config = config
-        self.credentials = pika.PlainCredentials(self.config.user, self.config.password)
-        self.parameters = pika.ConnectionParameters(
-            host=self.config.host,
-            port=self.config.port,
-            credentials=self.credentials,
-            heartbeat=600,
+        super().__init__(config)
+        self.queue_name = queue_name or getattr(self.config, "task_queue", "taskQueue")
+        self.result_queue_name = result_queue_name or getattr(
+            self.config, "result_queue", "respQueue"
         )
-
-        self.queue_name = queue_name
-        self.result_queue_name = result_queue_name
-        self.connection: Optional[pika.BlockingConnection] = None
-        self.channel: Optional[pika.channel.Channel] = None
-        # 4 threads for processing tasks
-        self.executor = ThreadPoolExecutor(max_workers=4)
+        self.collection_name = collection_name
+        self.partition_name = partition_name
+        # processing workers
+        self.executor = ThreadPoolExecutor(
+            max_workers=getattr(self.config, "consumer_workers", 4)
+        )
+        # shared model loader
+        self.model_loader = ModelLoader()
+        # storage backend
+        self.storage = MinioStorage()
 
         self._connect()
 
     def _connect(self) -> None:
-        if self.connection and not self.connection.is_closed:
-            return
-        logger.info(
-            f"Connecting to RabbitMQ Server: {self.config.host}:{self.config.port}"
-        )
-
-        self.connection = pika.BlockingConnection(self.parameters)
-        self.channel = self.connection.channel()
-
-        # create or check (by default, taskQueue is created on published side)
+        self._ensure_connection()
+        assert self.channel is not None
+        # create or check queues
         self.channel.queue_declare(queue=self.queue_name, durable=True)
         self.channel.queue_declare(queue=self.result_queue_name, durable=True)
         logger.info(
@@ -98,7 +96,29 @@ class TaskConsumer:
                 logger.error(f"发送NACK或失败状态失败: {e}")
 
         try:
-            preprocess(task)
+            default_collection = (
+                getattr(task, "destination_collection", None)
+                or self.collection_name
+                or MilvusConfig.from_yaml().default_collection_name
+            )
+            logger.info(f"destination_collection: {default_collection}")
+            # get_pipeline returns a Pipeline class; instantiate it here
+            PipelineCls = get_pipeline(getattr(task, "task_type", "default"))
+            pipeline = PipelineCls(
+                model_loader=self.model_loader,
+                storage=self.storage,
+                destination_collection=default_collection,
+            )
+            chunks, embeddings = pipeline.process(task.document)
+
+            # Store embeddings via pipeline's interface to reduce coupling
+            pipeline.store_embedding(
+                chunks,
+                embeddings,
+                doc=task.document,
+                collection_name=default_collection,
+                partition_name=self.partition_name,
+            )
             self.connection.add_callback_threadsafe(
                 lambda: _on_task_done(task, ch, delivery_tag)
             )
@@ -114,6 +134,7 @@ class TaskConsumer:
         """更新 task 状态, 发布到结果队列"""
         if not self.connection or self.connection.is_closed:
             self._connect()
+        assert self.channel is not None
 
         task.status = status
         if status == TaskStatus.PROCESSING:
@@ -137,6 +158,7 @@ class TaskConsumer:
         """开始消费消息"""
         if not self.connection or self.connection.is_closed:
             self._connect()
+        assert self.channel is not None
 
         self.channel.basic_qos(prefetch_count=1)
         self.channel.basic_consume(
@@ -152,9 +174,3 @@ class TaskConsumer:
             if self.connection and not self.connection.is_closed:
                 self.connection.close()
                 logger.info("RabbitMQ连接已关闭")
-
-
-if __name__ == "__main__":
-    config = RabbitMQConfig()
-    consumer = TaskConsumer(config)
-    consumer.start_consuming()

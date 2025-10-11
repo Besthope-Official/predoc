@@ -1,47 +1,90 @@
 import os
 import torch
-from dataclasses import dataclass, field
+from typing import ClassVar
+from pydantic import Field, field_validator, model_validator
 from loguru import logger
+from .base import BaseConfig
 
 os.environ["TOKENIZERS_PARALLELISM"] = "true"
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 
 
-@dataclass
-class ModelConfig:
-    DEBUG: bool = field(
+class ModelConfig(BaseConfig):
+    """模型相关配置（解析、分块、嵌入）"""
+
+    yaml_section: ClassVar[str] = "text_processing"
+
+    debug: bool = Field(
         default_factory=lambda: os.getenv("DEBUG", "false").lower() == "true"
     )
-    DEVICE: str = "cuda" if torch.cuda.is_available() else "cpu"
-    CHUNK_OUTPUT_DIR: str = os.getenv("CHUNK_OUTPUT_DIR", "./output/chunks")
-    CHUNKS_FILE: str = field(default_factory=lambda: os.getenv("CHUNKS_FILE", ""))
-    BATCH_SIZE: int = field(default_factory=lambda: int(os.getenv("BATCH_SIZE", "4")))
-    CHUNK_SIZE: int = field(default_factory=lambda: int(os.getenv("CHUNK_SIZE", "512")))
-    CHUNK_OVERLAP: int = field(
+    device: str = Field(default="cuda" if torch.cuda.is_available() else "cpu")
+    chunk_output_dir: str = Field(
+        default_factory=lambda: os.getenv("CHUNK_OUTPUT_DIR", "./output/chunks")
+    )
+    chunks_file: str = Field(default_factory=lambda: os.getenv("CHUNKS_FILE", ""))
+    batch_size: int = Field(default_factory=lambda: int(os.getenv("BATCH_SIZE", "4")))
+    chunk_size: int = Field(default_factory=lambda: int(os.getenv("CHUNK_SIZE", "512")))
+    chunk_overlap: int = Field(
         default_factory=lambda: int(os.getenv("CHUNK_OVERLAP", "16"))
     )
-    MIN_CHUNK_LENGTH: int = field(
+    min_chunk_length: int = Field(
         default_factory=lambda: int(os.getenv("MIN_CHUNK_LENGTH", "50"))
     )
-    MAX_LENGTH: int = field(default_factory=lambda: int(os.getenv("MAX_LENGTH", "512")))
-    ENCODING: str = os.getenv("ENCODING", "utf-8-sig")
-    EMBEDDING_MODEL: str = "sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
-    EMBEDDING_MODEL_DIR: str = os.getenv("EMBEDDING_MODEL_DIR", "./models/embedding")
-    EMBEDDING_MODEL_NAME: str = os.getenv(
-        "EMBEDDING_MODEL_NAME", "paraphrase-multilingual-mpnet-base-v2"
+    max_length: int = Field(default_factory=lambda: int(os.getenv("MAX_LENGTH", "512")))
+    encoding: str = Field(default="utf-8-sig")
+    embedding_model: str = Field(
+        default="sentence-transformers/paraphrase-multilingual-mpnet-base-v2"
     )
-    EMBEDDING_HF_REPO_ID: str = os.getenv(
-        "EMBEDDING_HF_REPO_ID",
-        "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+    embedding_model_dir: str = Field(
+        default_factory=lambda: os.getenv("EMBEDDING_MODEL_DIR", "./models/embedding")
+    )
+    embedding_model_name: str = Field(
+        default_factory=lambda: os.getenv(
+            "EMBEDDING_MODEL_NAME", "paraphrase-multilingual-mpnet-base-v2"
+        )
+    )
+    embedding_hf_repo_id: str = Field(
+        default_factory=lambda: os.getenv(
+            "EMBEDDING_HF_REPO_ID",
+            "sentence-transformers/paraphrase-multilingual-mpnet-base-v2",
+        )
+    )
+    yolo_model_dir: str = Field(
+        default_factory=lambda: os.getenv("YOLO_MODEL_DIR", "./models/YOLOv10")
+    )
+    yolo_model_filename: str = Field(
+        default_factory=lambda: os.getenv(
+            "YOLO_MODEL_FILENAME", "doclayout_yolo_docstructbench_imgsz1024.pt"
+        )
+    )
+    yolo_hf_repo_id: str = Field(
+        default_factory=lambda: os.getenv(
+            "YOLO_HF_REPO_ID", "juliozhao/DocLayout-YOLO-DocStructBench"
+        )
     )
 
-    YOLO_MODEL_DIR: str = os.getenv("YOLO_MODEL_DIR", "./models/YOLOv10")
-    YOLO_MODEL_FILENAME: str = os.getenv(
-        "YOLO_MODEL_FILENAME", "doclayout_yolo_docstructbench_imgsz1024.pt"
-    )
-    YOLO_HF_REPO_ID: str = os.getenv(
-        "YOLO_HF_REPO_ID", "juliozhao/DocLayout-YOLO-DocStructBench"
-    )
+    @field_validator("batch_size")
+    @classmethod
+    def validate_batch_size(cls, v: int) -> int:
+        if not 1 <= v <= 64:
+            raise ValueError("batch_size 应在 1-64 之间")
+        return v
+
+    @field_validator("min_chunk_length")
+    @classmethod
+    def validate_min_chunk_length(cls, v: int) -> int:
+        if not v > 0:
+            raise ValueError("min_chunk_length 应大于 0")
+        return v
+
+    @model_validator(mode="after")
+    def validate_chunk_config(self):
+        if not 1 <= self.chunk_size <= 4096:
+            raise ValueError("chunk_size 应在 1-4096 之间")
+        if not 0 <= self.chunk_overlap < self.chunk_size:
+            raise ValueError("chunk_overlap 应在 0 到 chunk_size 之间")
+        logger.info(f"配置加载成功: embedding_model={self.embedding_model}")
+        return self
 
     def validate_path(self, path: str, needs_write: bool = True) -> str:
         dir_path = os.path.dirname(path) or path
@@ -59,25 +102,9 @@ class ModelConfig:
             logger.error(f"处理路径 {path} 失败: {e}")
             raise
 
-    def __post_init__(self):
-        try:
-            if not 1 <= self.BATCH_SIZE <= 64:
-                raise ValueError("BATCH_SIZE 应在 1-64 之间")
-            if not 1 <= self.CHUNK_SIZE <= 4096:
-                raise ValueError("CHUNK_SIZE 应在 1-4096 之间")
-            if not 0 <= self.CHUNK_OVERLAP < self.CHUNK_SIZE:
-                raise ValueError("CHUNK_OVERLAP 应在 0 到 CHUNK_SIZE 之间")
-            if not self.MIN_CHUNK_LENGTH > 0:
-                raise ValueError("MIN_CHUNK_LENGTH 应大于 0")
-        except ValueError as e:
-            logger.error(f"参数验证失败: {e}")
-            raise
-
-        logger.info(f"配置加载成功: EMBEDDING_MODEL={self.EMBEDDING_MODEL}")
-
 
 try:
-    CONFIG = ModelConfig()
+    CONFIG = ModelConfig.from_yaml()
 except Exception as e:
     logger.error(f"配置初始化失败: {e}")
     raise

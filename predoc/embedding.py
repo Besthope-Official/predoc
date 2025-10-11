@@ -10,7 +10,7 @@ from .model import init_model
 class EmbeddingModel:
     def __init__(self, model_type="st"):
         self.model_type = model_type
-        self.device = CONFIG.DEVICE
+        self.device = CONFIG.device
         self.normalize = True
         self.tokenizer = None
         model = init_model(model_type)
@@ -32,7 +32,7 @@ class EmbeddingModel:
                         batch,
                         padding=True,
                         truncation=True,
-                        max_length=CONFIG.MAX_LENGTH,
+                        max_length=CONFIG.max_length,
                         return_tensors="pt",
                     ).to(self.device)
                     outputs = model(**inputs)
@@ -59,12 +59,12 @@ class EmbeddingModel:
             logger.warning("文本列表为空或全为空白")
             return np.array([])
 
-        batch_size = min(CONFIG.BATCH_SIZE, 32 if self.device == "cuda" else 8)
+        batch_size = min(CONFIG.batch_size, 32 if self.device == "cuda" else 8)
         try:
             if self.model_type == "hf":
                 result = self._hf_generate_embeddings(texts, batch_size)
             else:
-                show_progress_bar = CONFIG.DEBUG
+                show_progress_bar = CONFIG.debug
                 result = self.model.encode(
                     texts,
                     batch_size=batch_size,

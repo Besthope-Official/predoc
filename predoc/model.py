@@ -46,7 +46,7 @@ def _model_or_path(model_name: str, local_dir: str, hf_repo_id: str) -> str:
 
 @lru_cache(maxsize=8)
 def _load_tokenizer_and_model(
-    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE
+    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.device
 ) -> Tuple[AutoTokenizer, AutoModel]:
     """
     Load AutoTokenizer and AutoModel. Downloads and saves to local_dir if not present.
@@ -71,7 +71,7 @@ def _load_tokenizer_and_model(
 
 @lru_cache(maxsize=8)
 def _load_sentence_transformer(
-    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE
+    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.device
 ) -> SentenceTransformer:
     """
     Load SentenceTransformer model. Downloads and saves to local_dir if not present.
@@ -92,7 +92,7 @@ def _load_sentence_transformer(
 
 @lru_cache(maxsize=8)
 def _load_yolo_model(
-    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.DEVICE
+    model_name: str, local_dir: str, hf_repo_id: str, device: str = CONFIG.device
 ):
     """
     Load YOLOv10 model. Downloads and saves to local_dir if not present.
@@ -109,22 +109,22 @@ def init_model(model_type="st"):
         if model_type == "hf":
             # This type of embedding model is not used in current project.
             auto_tokenizer, auto_model = _load_tokenizer_and_model(
-                CONFIG.EMBEDDING_MODEL_NAME,
-                CONFIG.EMBEDDING_MODEL_DIR,
-                CONFIG.EMBEDDING_HF_REPO_ID,
+                CONFIG.embedding_model_name,
+                CONFIG.embedding_model_dir,
+                CONFIG.embedding_hf_repo_id,
             )
             model = (auto_tokenizer, auto_model)
         elif model_type == "st":
             model = _load_sentence_transformer(
-                CONFIG.EMBEDDING_MODEL_NAME,
-                CONFIG.EMBEDDING_MODEL_DIR,
-                CONFIG.EMBEDDING_HF_REPO_ID,
+                CONFIG.embedding_model_name,
+                CONFIG.embedding_model_dir,
+                CONFIG.embedding_hf_repo_id,
             )
         elif model_type == "yolo":
             model = _load_yolo_model(
-                CONFIG.YOLO_MODEL_FILENAME,
-                CONFIG.YOLO_MODEL_DIR,
-                CONFIG.YOLO_HF_REPO_ID,
+                CONFIG.yolo_model_filename,
+                CONFIG.yolo_model_dir,
+                CONFIG.yolo_hf_repo_id,
             )
         else:
             raise ValueError(f"Unknown model type: {model_type}")
