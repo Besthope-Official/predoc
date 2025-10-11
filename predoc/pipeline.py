@@ -10,10 +10,6 @@ from predoc.processor import PDFProcessor
 from predoc.chunker import LLMChunker
 from predoc.parser import YoloParser
 from predoc.embedding import EmbeddingModel
-from task.oss import download_file, check_file_exists
-from config.backend import OSSConfig
-
-_oss_config = OSSConfig.from_yaml()
 
 
 class BasePipeline(ABC):
@@ -26,10 +22,12 @@ class BasePipeline(ABC):
     def __init__(
         self,
         model_loader: Optional[ModelLoader] = None,
+        storage=None,
         *,
         destination_collection: Optional[str] = None,
     ) -> None:
         self.model_loader = model_loader or ModelLoader()
+        self.storage = storage
         self.destination_collection = destination_collection
 
     @abstractmethod
@@ -64,8 +62,10 @@ class DefaultPDFPipeline(BasePipeline):
     - 否则从 pdf bucket 下载 PDF，走完整 PDFProcessor 流程
     """
 
-    def __init__(self, model_loader=None, *, destination_collection=None):
-        super().__init__(model_loader, destination_collection=destination_collection)
+    def __init__(self, model_loader=None, storage=None, *, destination_collection=None):
+        super().__init__(
+            model_loader, storage, destination_collection=destination_collection
+        )
 
     def process(self, doc: Document) -> Tuple[List[str], List[List[float]]]:
         from pathlib import Path
@@ -79,13 +79,14 @@ class DefaultPDFPipeline(BasePipeline):
 
         doc_bucket = getattr(doc, "bucket", None)
 
-        if check_file_exists(parsed_text_obj):
+        # 检查缓存(仅当有 storage 时)
+        if self.storage and self.storage.exists(parsed_text_obj):
             temp_dir = Path(os.environ.get("TEMP", "/tmp")) / f"pipeline_{stem}"
             temp_dir.mkdir(parents=True, exist_ok=True)
             local_text_path = temp_dir / "text.txt"
-            download_file(
-                parsed_text_obj, local_text_path, _oss_config.preprocessed_files_bucket
-            )
+
+            # storage 自己处理默认 bucket
+            self.storage.download(parsed_text_obj, local_text_path, bucket=None)
             text = local_text_path.read_text(encoding="utf-8")
 
             chunker = (
@@ -112,7 +113,21 @@ class DefaultPDFPipeline(BasePipeline):
         temp_dir.mkdir(parents=True, exist_ok=True)
         local_pdf = temp_dir / file_path.name
 
-        download_file(file_name, local_pdf, doc_bucket or _oss_config.pdf_bucket)
+        # 下载 PDF (如果有 storage)
+        if self.storage:
+            self.storage.download(file_name, local_pdf, doc_bucket)
+        else:
+            # 本地文件,直接复制
+            source_path = Path(file_name)
+            if not source_path.exists():
+                raise FileNotFoundError(f"本地文件不存在: {file_name}")
+            shutil.copy2(source_path, local_pdf)
+
+        # 创建 parser 并注入 storage
+        if self.model_loader:
+            parser = self.model_loader.get_parser(storage=self.storage)
+        else:
+            parser = YoloParser(storage=self.storage)
 
         processor = PDFProcessor(
             chunker=(
@@ -120,12 +135,11 @@ class DefaultPDFPipeline(BasePipeline):
                 if self.model_loader
                 else LLMChunker()
             ),
-            parser=(self.model_loader.parser if self.model_loader else YoloParser()),
+            parser=parser,
             embedder=(
                 self.model_loader.embedder if self.model_loader else EmbeddingModel()
             ),
             output_dir=str(temp_dir),
-            upload_to_oss=True,
         )
         try:
             chunks, embeddings = processor.preprocess(
@@ -152,8 +166,10 @@ PIPELINE_REGISTRY = {
 class PrintFilenamePipeline(BasePipeline):
     """用于 Debug"""
 
-    def __init__(self, model_loader=None, *, destination_collection=None):
-        super().__init__(model_loader, destination_collection=destination_collection)
+    def __init__(self, model_loader=None, storage=None, *, destination_collection=None):
+        super().__init__(
+            model_loader, storage, destination_collection=destination_collection
+        )
 
     def process(self, doc: Document) -> Tuple[List[str], List[List[float]]]:
         from loguru import logger

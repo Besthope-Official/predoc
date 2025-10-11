@@ -10,6 +10,7 @@ from config.backend import RabbitMQConfig, MilvusConfig
 from schemas import TaskStatus, Task
 from api.utils import ModelLoader
 from predoc.pipeline import get_pipeline
+from predoc.storage import MinioStorage
 from .mq import RabbitMQBase
 
 
@@ -40,6 +41,8 @@ class TaskConsumer(RabbitMQBase):
         )
         # shared model loader
         self.model_loader = ModelLoader()
+        # storage backend
+        self.storage = MinioStorage()
 
         self._connect()
 
@@ -103,6 +106,7 @@ class TaskConsumer(RabbitMQBase):
             PipelineCls = get_pipeline(getattr(task, "task_type", "default"))
             pipeline = PipelineCls(
                 model_loader=self.model_loader,
+                storage=self.storage,
                 destination_collection=default_collection,
             )
             chunks, embeddings = pipeline.process(task.document)

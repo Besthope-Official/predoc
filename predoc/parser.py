@@ -11,32 +11,29 @@ from PIL import Image
 import pytesseract
 import cv2
 
-from config.backend import OSSConfig
-from task.oss import upload_file
 from .utils import clean_text
 from .model import init_model
 from config.model import CONFIG
-
-_oss_config = OSSConfig.from_yaml()
 
 
 class Parser(ABC):
     """文档解析器基类"""
 
-    def __init__(self):
-        pass
+    def __init__(self, storage=None):
+        """初始化解析器
+
+        Args:
+            storage: StorageBackend 实例,None 表示不使用远程存储
+        """
+        self.storage = storage
 
     @abstractmethod
-    def parse(
-        self, file_path: str, output_dir: str, upload_to_oss: bool = False
-    ) -> str:
-        """
-        解析文档，提取文本内容
+    def parse(self, file_path: str, output_dir: str) -> str:
+        """解析文档，提取文本内容
 
         Args:
             file_path: 文档文件路径
             output_dir: 输出目录
-            upload_to_oss: 是否上传到OSS
 
         Returns:
             提取的文本内容
@@ -71,24 +68,21 @@ class Parser(ABC):
             dirs["temp"],
         )
 
-    @staticmethod
-    def _upload_to_oss(save_path: str, object_name: str):
-        """上传文件到OSS"""
-        upload_result = upload_file(
-            file_path=Path(save_path),
-            object_name=object_name,
-            bucket_name=_oss_config.preprocessed_files_bucket,
-        )
-        logger.debug(f"upload to {upload_result}")
-
     def _save_and_upload_file(
         self,
         content,
         save_path: Path,
         paper_title: str = None,
-        upload_to_oss: bool = False,
+        bucket: str = None,
     ):
-        """保存文件并可选上传到OSS"""
+        """保存文件并可选上传到存储后端
+
+        Args:
+            content: 文件内容
+            save_path: 本地保存路径
+            paper_title: 文档标题(用于生成对象名称)
+            bucket: 存储桶名称,None 则由 storage 使用默认值
+        """
         save_path.parent.mkdir(parents=True, exist_ok=True)
 
         if isinstance(content, np.ndarray):
@@ -102,13 +96,14 @@ class Parser(ABC):
 
         logger.info(f"已保存: {save_path}")
 
-        if upload_to_oss:
+        if self.storage:
             if paper_title:
                 object_name = f"{paper_title}/{save_path.name}"
             else:
                 object_name = save_path.name
 
-            self._upload_to_oss(str(save_path), object_name)
+            self.storage.upload(save_path, object_name, bucket)
+            logger.debug(f"已上传到存储: {object_name}")
 
         return str(save_path)
 
@@ -130,8 +125,8 @@ class Parser(ABC):
 class YoloParser(Parser):
     """基于YOLO模型的PDF解析器"""
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, storage=None):
+        super().__init__(storage=storage)
         self.model = init_model("yolo")
 
     def _process_page(
@@ -142,7 +137,6 @@ class YoloParser(Parser):
         counters: Dict,
         content_index: List,
         paper_title: str,
-        upload_to_oss: bool,
         formulas_dir: Path,
         figures_dir: Path,
         tables_dir: Path,
@@ -186,8 +180,7 @@ class YoloParser(Parser):
                 saved_path = self._save_and_upload_file(
                     crop_img,
                     save_path,
-                    paper_title=paper_title if upload_to_oss else None,
-                    upload_to_oss=upload_to_oss,
+                    paper_title=paper_title if self.storage else None,
                 )
 
                 marker = f"[/{element_type}][{counters[element_type]}][/{element_type}]"
@@ -214,9 +207,7 @@ class YoloParser(Parser):
         os.remove(temp_img_path)
         return text_blocks, found_references
 
-    def parse(
-        self, file_path: str, output_dir: str, upload_to_oss: bool = False
-    ) -> str:
+    def parse(self, file_path: str, output_dir: str) -> str:
         """处理PDF文件，提取结构化内容"""
         self.check_file_access(file_path)
 
@@ -249,7 +240,6 @@ class YoloParser(Parser):
                 counters,
                 content_index,
                 paper_title,
-                upload_to_oss,
                 formulas_dir,
                 figures_dir,
                 tables_dir,
@@ -265,7 +255,6 @@ class YoloParser(Parser):
             content_index,
             paper_output_dir / Path("content_index.json"),
             paper_title=paper_title,
-            upload_to_oss=upload_to_oss,
         )
 
         parsed_text = "\n\n".join(all_text)
@@ -273,7 +262,6 @@ class YoloParser(Parser):
             parsed_text,
             paper_output_dir / Path("text.txt"),
             paper_title=paper_title,
-            upload_to_oss=upload_to_oss,
         )
 
         return clean_text(parsed_text)

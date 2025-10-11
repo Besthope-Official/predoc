@@ -95,14 +95,16 @@ async def get_processor(
     model_loader: Annotated[ModelLoader, Depends(get_model_loader)],
     temp_dir: str,
 ) -> PDFProcessor:
-    """获取文档处理器"""
+    """获取文档处理器
+
+    Note: API 模式不上传到 OSS,parser.storage 默认为 None
+    """
     chunker = model_loader.get_chunker(chunker_strategy)
     return PDFProcessor(
         chunker=chunker,
         parser=model_loader.parser,
         embedder=model_loader.embedder,
         output_dir=temp_dir,
-        upload_to_oss=True,
     )
 
 

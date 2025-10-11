@@ -3,6 +3,7 @@
 from typing_extensions import TypedDict
 from typing import Any, Optional
 from loguru import logger
+import threading
 
 from predoc.parser import Parser, YoloParser
 from predoc.chunker import Chunker, LLMChunker, SentenceChunker
@@ -10,7 +11,10 @@ from predoc.embedding import EmbeddingModel
 
 
 class ModelLoader:
-    """模型加载器，管理所有模型实例的初始化和访问"""
+    """模型加载器，管理所有模型实例的初始化和访问
+
+    线程安全: 使用锁保护模型实例的创建
+    """
 
     def __init__(self):
         """初始化模型加载器"""
@@ -18,38 +22,71 @@ class ModelLoader:
         self._llm_chunker = None
         self._sentence_chunker = None
         self._embedder = None
+        self._lock = threading.Lock()
         logger.info("ModelLoader 已初始化")
 
     @property
     def parser(self) -> Parser:
-        """获取解析器实例（懒加载）"""
+        """获取解析器实例（懒加载）
+
+        注意: parser 默认不带 storage,需要手动设置 parser.storage
+        线程安全: 使用双重检查锁定模式
+        """
         if self._parser is None:
-            self._parser = YoloParser()
-            logger.info("解析器实例已加载")
+            with self._lock:
+                if self._parser is None:  # 双重检查
+                    self._parser = YoloParser(storage=None)
+                    logger.info("解析器实例已加载")
+        return self._parser
+
+    def get_parser(self, storage=None) -> Parser:
+        """获取带 storage 的解析器实例
+
+        Args:
+            storage: StorageBackend 实例,None 表示不使用远程存储
+
+        Returns:
+            配置了 storage 的 Parser 实例
+
+        线程安全: 使用锁保护实例创建和更新
+        """
+        with self._lock:
+            if self._parser is None:
+                self._parser = YoloParser(storage=storage)
+                logger.info("解析器实例已加载")
+            else:
+                # 如果已存在,更新 storage
+                self._parser.storage = storage
         return self._parser
 
     @property
     def llm_chunker(self) -> LLMChunker:
         """获取LLM分块器实例（懒加载）"""
         if self._llm_chunker is None:
-            self._llm_chunker = LLMChunker()
-            logger.info("LLM分块器实例已加载")
+            with self._lock:
+                if self._llm_chunker is None:
+                    self._llm_chunker = LLMChunker()
+                    logger.info("LLM分块器实例已加载")
         return self._llm_chunker
 
     @property
     def sentence_chunker(self) -> SentenceChunker:
         """获取句子分块器实例（懒加载）"""
         if self._sentence_chunker is None:
-            self._sentence_chunker = SentenceChunker()
-            logger.info("句子分块器实例已加载")
+            with self._lock:
+                if self._sentence_chunker is None:
+                    self._sentence_chunker = SentenceChunker()
+                    logger.info("句子分块器实例已加载")
         return self._sentence_chunker
 
     @property
     def embedder(self) -> EmbeddingModel:
         """获取嵌入模型实例（懒加载）"""
         if self._embedder is None:
-            self._embedder = EmbeddingModel()
-            logger.info("嵌入模型实例已加载")
+            with self._lock:
+                if self._embedder is None:
+                    self._embedder = EmbeddingModel()
+                    logger.info("嵌入模型实例已加载")
         return self._embedder
 
     def get_chunker(self, strategy: str = "semantic") -> Chunker:
@@ -59,10 +96,17 @@ class ModelLoader:
         else:
             return self.sentence_chunker
 
-    def preload_all(self):
-        """预加载所有模型"""
+    def preload_all(self, storage=None):
+        """预加载所有模型
+
+        Args:
+            storage: StorageBackend 实例,传递给 parser
+        """
         logger.info("开始预加载所有模型...")
-        _ = self.parser
+        if storage:
+            _ = self.get_parser(storage=storage)
+        else:
+            _ = self.parser
         _ = self.llm_chunker
         _ = self.sentence_chunker
         _ = self.embedder
