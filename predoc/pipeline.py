@@ -68,16 +68,18 @@ class DefaultPDFPipeline(BasePipeline):
         super().__init__(model_loader, destination_collection=destination_collection)
 
     def process(self, doc: Document) -> Tuple[List[str], List[List[float]]]:
+        from pathlib import Path
+        import os
+        import shutil
+
         file_name = doc.fileName
-        stem = file_name.rsplit(".", 1)[0]
+        file_path = Path(file_name)
+        stem = file_path.stem
         parsed_text_obj = f"{stem}/text.txt"
 
         doc_bucket = getattr(doc, "bucket", None)
 
         if check_file_exists(parsed_text_obj):
-            from pathlib import Path
-            import os
-
             temp_dir = Path(os.environ.get("TEMP", "/tmp")) / f"pipeline_{stem}"
             temp_dir.mkdir(parents=True, exist_ok=True)
             local_text_path = temp_dir / "text.txt"
@@ -97,22 +99,18 @@ class DefaultPDFPipeline(BasePipeline):
             chunks = chunker.chunk(text)
             embeddings = embedder.generate_embeddings(chunks)
             try:
-                import shutil
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                from loguru import logger
 
-                shutil.rmtree(temp_dir, ignore_errors=True)
-            except Exception:
-                pass
+                logger.warning(
+                    f"Failed to clean up temporary directory {temp_dir}: {e}"
+                )
             return chunks, embeddings
-
-        from pathlib import Path
-        import os
-        import shutil
 
         temp_dir = Path(os.environ.get("TEMP", "/tmp")) / f"pipeline_{stem}"
         temp_dir.mkdir(parents=True, exist_ok=True)
-        local_pdf = temp_dir / (
-            file_name if "/" not in file_name else file_name.split("/")[-1]
-        )
+        local_pdf = temp_dir / file_path.name
 
         download_file(file_name, local_pdf, doc_bucket or _oss_config.pdf_bucket)
 
@@ -135,9 +133,13 @@ class DefaultPDFPipeline(BasePipeline):
             )
         finally:
             try:
-                shutil.rmtree(temp_dir, ignore_errors=True)
-            except Exception:
-                pass
+                shutil.rmtree(temp_dir)
+            except Exception as e:
+                from loguru import logger
+
+                logger.warning(
+                    f"Failed to clean up temporary directory {temp_dir}: {e}"
+                )
         return chunks, embeddings
 
 
