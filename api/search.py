@@ -4,7 +4,7 @@ from typing import List, Dict, Any
 from loguru import logger
 from urllib.parse import urljoin
 
-from task.milvus import search_embedding
+from backends.milvus import search_embedding
 from api.utils import ModelLoader
 from config.backend import OSSConfig
 

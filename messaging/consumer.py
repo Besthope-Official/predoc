@@ -11,7 +11,7 @@ from schemas import TaskStatus, Task
 from api.utils import ModelLoader
 from predoc.pipeline import get_pipeline
 from predoc.storage import MinioStorage
-from .mq import RabbitMQBase
+from backends.rabbitmq import RabbitMQBase
 
 
 class TaskConsumer(RabbitMQBase):

@@ -47,7 +47,7 @@ class MinioStorage(StorageBackend):
     def upload(
         self, local_path: Path, object_name: str, bucket: Optional[str] = None
     ) -> str:
-        from task.oss import upload_file
+        from backends.minio import upload_file
 
         target_bucket = bucket or self.config.preprocessed_files_bucket
         return upload_file(local_path, object_name, target_bucket)
@@ -55,7 +55,7 @@ class MinioStorage(StorageBackend):
     def download(
         self, object_name: str, local_path: Path, bucket: Optional[str] = None
     ) -> Path:
-        from task.oss import download_file
+        from backends.minio import download_file
 
         if bucket is None:
             # 智能判断规则:
@@ -69,7 +69,7 @@ class MinioStorage(StorageBackend):
         return download_file(object_name, local_path, bucket)
 
     def exists(self, object_name: str, bucket: Optional[str] = None) -> bool:
-        from task.oss import check_file_exists
+        from backends.minio import check_file_exists
 
         target_bucket = bucket or self.config.preprocessed_files_bucket
         return check_file_exists(object_name, target_bucket)

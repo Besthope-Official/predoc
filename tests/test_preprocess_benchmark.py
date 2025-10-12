@@ -126,7 +126,7 @@ class TestPDFProcessing:
     def test_preprocess_with_oss_benchmark(self, pdf_files: List[Path], benchmark):
         pdf_file = pdf_files[0]
         # validate if can connect to minio
-        from task.oss import get_minio_client
+        from backends.minio import get_minio_client
 
         try:
             client = get_minio_client()

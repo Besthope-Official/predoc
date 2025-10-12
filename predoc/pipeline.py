@@ -44,7 +44,7 @@ class BasePipeline(ABC):
         partition_name: Optional[str] = None,
     ) -> None:
         """默认实现：构建 metadata 并入库。子类可覆盖以自定义写入逻辑。"""
-        from task.milvus import store_embedding_task
+        from backends.milvus import store_embedding_task
 
         metadata = doc.to_metadata()
         store_embedding_task(

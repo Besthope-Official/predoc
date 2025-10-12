@@ -3,8 +3,8 @@ import json
 import time
 import pytest
 
-from task.milvus import _get_milvus_client
-from retrieve.search import retrieve_documents
+from backends.milvus import _get_milvus_client
+from api.search import retrieve_documents
 from loguru import logger
 
 QUESTION_JSON_DIR = Path(__file__).parent.parent / "AI预实验文献/questions.json"
