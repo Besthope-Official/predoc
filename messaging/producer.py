@@ -9,8 +9,8 @@ from loguru import logger
 from config.backend import RabbitMQConfig, OSSConfig
 from schemas import Task, TaskStatus
 from schemas.document import Document
-from .oss import upload_file
-from .mq import RabbitMQBase
+from backends.minio import upload_file
+from backends.rabbitmq import RabbitMQBase
 import pika
 
 _oss_config = OSSConfig.from_yaml()
