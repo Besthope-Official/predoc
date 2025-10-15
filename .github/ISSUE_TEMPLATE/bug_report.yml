@@ -1,0 +1,148 @@
+name: Bug Report
+description: Report a bug or unexpected behavior in Predoc
+title: "[Bug]: "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the sections below to help us diagnose and fix the issue.
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: A clear and concise description of what the bug is.
+      placeholder: Describe the bug you encountered...
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Steps to Reproduce
+      description: Steps to reproduce the behavior
+      placeholder: |
+        1. Set up config with '...'
+        2. Run command '...'
+        3. Send request to endpoint '...'
+        4. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What did you expect to happen?
+      placeholder: Describe what you expected...
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happened?
+      placeholder: Describe what actually happened...
+    validations:
+      required: true
+
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Operation Mode
+      description: Which mode are you running Predoc in?
+      options:
+        - API Server Mode (ENABLE_MASSAGE_QUEUE=false)
+        - Task Consumer Mode (ENABLE_MASSAGE_QUEUE=true)
+        - Not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      multiple: true
+      options:
+        - PDF Parser (YoloParser)
+        - Text Chunker (LLMChunker/SemanticChunker)
+        - Embedding Model
+        - Pipeline/Processor
+        - API Endpoints
+        - RabbitMQ Consumer/Producer
+        - MinIO Storage
+        - Milvus Vector DB
+        - Configuration
+        - Docker/Deployment
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Information about your environment
+      placeholder: |
+        - OS: [e.g., Ubuntu 22.04, macOS 13.0]
+        - Python Version: [e.g., 3.10.12]
+        - Predoc Version/Commit: [e.g., v1.0.0, commit abc123]
+        - Deployment: [Docker/Native/Other]
+        - GPU/CPU: [e.g., NVIDIA RTX 3090 / CPU-only]
+      value: |
+        - OS:
+        - Python Version:
+        - Predoc Version/Commit:
+        - Deployment:
+        - GPU/CPU:
+    validations:
+      required: true
+
+  - type: textarea
+    id: config
+    attributes:
+      label: Configuration
+      description: Relevant parts of your config.yaml (remove sensitive data)
+      placeholder: |
+        ```yaml
+        app:
+          enable_message_queue: false
+        models:
+          device: cuda
+        # ... other relevant config
+        ```
+      render: yaml
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs/Error Messages
+      description: Relevant log output or error messages
+      placeholder: |
+        ```
+        Paste your logs here (remove sensitive information)
+        ```
+      render: shell
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: Additional Context
+      description: Any other context about the problem (screenshots, related issues, etc.)
+      placeholder: Add any other context here...
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Pre-submission Checklist
+      description: Please confirm the following before submitting
+      options:
+        - label: I have searched existing issues to avoid duplicates
+          required: true
+        - label: I am using the latest version of Predoc or have specified my version above
+          required: true
+        - label: I have removed all sensitive information from logs and configuration
+          required: true

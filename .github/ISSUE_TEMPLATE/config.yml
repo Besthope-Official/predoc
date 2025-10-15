@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/besthope/predoc/blob/main/README.md
+    about: Check the documentation for setup and usage guides
+  - name: Configuration Reference
+    url: https://github.com/besthope/predoc/blob/main/CONFIGURATION.md
+    about: Detailed configuration reference and examples
+  - name: Question or Discussion
+    url: https://github.com/besthope/predoc/discussions
+    about: Ask questions or start a discussion about Predoc
