@@ -10,6 +10,7 @@ from predoc.processor import PDFProcessor
 from predoc.chunker import LLMChunker
 from predoc.parser import YoloParser
 from predoc.embedding import EmbeddingModel
+from predoc.utils import temporary_directory
 
 
 class BasePipeline(ABC):
@@ -69,7 +70,6 @@ class DefaultPDFPipeline(BasePipeline):
 
     def process(self, doc: Document) -> Tuple[List[str], List[List[float]]]:
         from pathlib import Path
-        import os
         import shutil
 
         file_name = doc.fileName
@@ -79,82 +79,62 @@ class DefaultPDFPipeline(BasePipeline):
 
         doc_bucket = getattr(doc, "bucket", None)
 
-        # 检查缓存(仅当有 storage 时)
+        # 优先查询存储的解析结果缓存
         if self.storage and self.storage.exists(parsed_text_obj):
-            temp_dir = Path(os.environ.get("TEMP", "/tmp")) / f"pipeline_{stem}"
-            temp_dir.mkdir(parents=True, exist_ok=True)
-            local_text_path = temp_dir / "text.txt"
+            with temporary_directory(f"pipeline_{stem}_") as temp_dir:
+                local_text_path = temp_dir / "text.txt"
 
-            # storage 自己处理默认 bucket
-            self.storage.download(parsed_text_obj, local_text_path, bucket=None)
-            text = local_text_path.read_text(encoding="utf-8")
+                self.storage.download(parsed_text_obj, local_text_path, bucket=None)
+                text = local_text_path.read_text(encoding="utf-8")
 
-            chunker = (
-                self.model_loader.get_chunker("semantic_api")
-                if self.model_loader
-                else LLMChunker()
-            )
-            embedder = (
-                self.model_loader.embedder if self.model_loader else EmbeddingModel()
-            )
-            chunks = chunker.chunk(text)
-            embeddings = embedder.generate_embeddings(chunks)
-            try:
-                shutil.rmtree(temp_dir)
-            except Exception as e:
-                from loguru import logger
-
-                logger.warning(
-                    f"Failed to clean up temporary directory {temp_dir}: {e}"
+                chunker = (
+                    self.model_loader.get_chunker("semantic_api")
+                    if self.model_loader
+                    else LLMChunker()
                 )
-            return chunks, embeddings
+                embedder = (
+                    self.model_loader.embedder
+                    if self.model_loader
+                    else EmbeddingModel()
+                )
+                chunks = chunker.chunk(text)
+                embeddings = embedder.generate_embeddings(chunks)
+                return chunks, embeddings
 
-        temp_dir = Path(os.environ.get("TEMP", "/tmp")) / f"pipeline_{stem}"
-        temp_dir.mkdir(parents=True, exist_ok=True)
-        local_pdf = temp_dir / file_path.name
+        with temporary_directory(f"pipeline_{stem}_") as temp_dir:
+            local_pdf = temp_dir / file_path.name
 
-        # 下载 PDF (如果有 storage)
-        if self.storage:
-            self.storage.download(file_name, local_pdf, doc_bucket)
-        else:
-            # 本地文件,直接复制
-            source_path = Path(file_name)
-            if not source_path.exists():
-                raise FileNotFoundError(f"本地文件不存在: {file_name}")
-            shutil.copy2(source_path, local_pdf)
+            if self.storage:
+                self.storage.download(file_name, local_pdf, doc_bucket)
+            else:
+                source_path = Path(file_name)
+                if not source_path.exists():
+                    raise FileNotFoundError(f"本地文件不存在: {file_name}")
+                shutil.copy2(source_path, local_pdf)
 
-        # 创建 parser 并注入 storage
-        if self.model_loader:
-            parser = self.model_loader.get_parser(storage=self.storage)
-        else:
-            parser = YoloParser(storage=self.storage)
+            if self.model_loader:
+                parser = self.model_loader.get_parser(storage=self.storage)
+            else:
+                parser = YoloParser(storage=self.storage)
 
-        processor = PDFProcessor(
-            chunker=(
-                self.model_loader.get_chunker("semantic_api")
-                if self.model_loader
-                else LLMChunker()
-            ),
-            parser=parser,
-            embedder=(
-                self.model_loader.embedder if self.model_loader else EmbeddingModel()
-            ),
-            output_dir=str(temp_dir),
-        )
-        try:
+            processor = PDFProcessor(
+                chunker=(
+                    self.model_loader.get_chunker("semantic_api")
+                    if self.model_loader
+                    else LLMChunker()
+                ),
+                parser=parser,
+                embedder=(
+                    self.model_loader.embedder
+                    if self.model_loader
+                    else EmbeddingModel()
+                ),
+                output_dir=str(temp_dir),
+            )
             chunks, embeddings = processor.preprocess(
                 file_path=str(local_pdf), wrapper=False
             )
-        finally:
-            try:
-                shutil.rmtree(temp_dir)
-            except Exception as e:
-                from loguru import logger
-
-                logger.warning(
-                    f"Failed to clean up temporary directory {temp_dir}: {e}"
-                )
-        return chunks, embeddings
+            return chunks, embeddings
 
 
 # 注册表：taskType -> Pipeline

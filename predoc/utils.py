@@ -1,6 +1,12 @@
+import os
 import re
-from loguru import logger
+import shutil
+import tempfile
+from contextlib import contextmanager
+from pathlib import Path
 from typing import List
+
+from loguru import logger
 
 
 class TextSplitter:
@@ -153,3 +159,34 @@ def reconstruct_chunks(
         chunk
         for chunk in reconstructed + [m[0] for m in markers] + [p[0] for p in pages]
     ]
+
+
+@contextmanager
+def temporary_directory(prefix: str = "temp_"):
+    """临时目录上下文管理器。
+
+    Args:
+        prefix: 临时目录名称前缀，用于标识不同用途的临时目录
+
+    Yields:
+        Path: 临时目录路径
+
+    Example:
+        >>> with temporary_directory("pipeline_") as temp_dir:
+        ...     temp_file = temp_dir / "data.txt"
+        ...     temp_file.write_text("content")
+        ...     # 使用临时目录进行操作
+        # 自动清理，即使出错也会执行清理
+    """
+    temp_base = os.environ.get("TEMP", tempfile.gettempdir())
+    temp_dir = Path(tempfile.mkdtemp(prefix=prefix, dir=temp_base))
+
+    try:
+        logger.debug(f"创建临时目录: {temp_dir}")
+        yield temp_dir
+    finally:
+        try:
+            shutil.rmtree(temp_dir)
+            logger.debug(f"已清理临时目录: {temp_dir}")
+        except Exception as e:
+            logger.warning(f"清理临时目录失败 {temp_dir}: {e}")
