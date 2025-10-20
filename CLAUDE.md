@@ -38,7 +38,6 @@ The service operates in one of two modes controlled by `ENABLE_MASSAGE_QUEUE` en
 - **`messaging/`**: Message queue task management (formerly `task/`)
   - `producer.py`: TaskProducer publishes tasks to RabbitMQ
   - `consumer.py`: TaskConsumer processes tasks from queue
-  - `preprocess.py`: Task preprocessing utilities
 
 - **`api/`**: FastAPI endpoints
   - `api.py`: Main application with routes for `/preprocess`, `/parser`, `/chunker`, `/embedding`, `/retrieval`
@@ -269,6 +268,33 @@ The project uses YAML-based configuration with environment variable override sup
 
 ## Recent Refactoring History
 
+### 2025-10: Dead Code Removal - messaging/preprocess.py
+
+**What Changed**:
+- Deleted `messaging/preprocess.py` (38 lines) with zero usage across the codebase
+
+**Rationale**:
+The `preprocess()` function in this module was completely superseded by `TaskConsumer._process_task()` and had not been updated to follow recent architectural changes:
+
+| Issue | preprocess.py | TaskConsumer._process_task() |
+|-------|---------------|------------------------------|
+| **Pipeline Selection** | ❌ Hardcoded `DefaultPDFPipeline` | ✅ Dynamic via `get_pipeline(task_type)` |
+| **Storage Injection** | ❌ Missing (2025-10 refactor) | ✅ Full `storage` parameter support |
+| **Thread Safety** | ❌ None | ✅ `add_callback_threadsafe()` |
+| **Error Handling** | ❌ Simple exception propagation | ✅ Publishes FAILED status to result queue |
+| **Flexibility** | ❌ Fixed parameters | ✅ Dynamic collection/partition selection |
+| **Usage** | ❌ Zero imports found | ✅ Core consumer logic |
+
+**Benefits**:
+- ✅ **Eliminates Confusion**: Prevents accidental use of outdated interface
+- ✅ **Reduces Maintenance**: No need to sync with future refactorings
+- ✅ **Zero Breaking Changes**: No code references this module
+- ✅ **Cleaner Architecture**: Single responsibility in TaskConsumer
+
+**Migration Impact**: None (module had zero usage)
+
+---
+
 ### 2025-10: Directory Structure Refactoring - Task & Retrieve Reorganization
 
 **What Changed**:
@@ -287,7 +313,7 @@ The project uses YAML-based configuration with environment variable override sup
    - **`messaging/`**: Task queue processing logic
      - `producer.py` (formerly `task/producer.py`)
      - `consumer.py` (formerly `task/consumer.py`)
-     - `preprocess.py` (formerly `task/preprocess.py`)
+     - ~~`preprocess.py` (formerly `task/preprocess.py`)~~ - *removed as dead code*
    - **`api/search.py`**: Document retrieval (formerly `retrieve/search.py`)
 
 3. **Import Path Updates**: All imports updated throughout codebase
