@@ -12,8 +12,9 @@ import threading
 from functools import lru_cache
 
 from predoc.processor import PDFProcessor
+from predoc.loader import ModelLoader
 from api.search import retrieve_documents
-from .utils import ModelLoader, api_success, api_fail, ApiResponse
+from .utils import api_success, api_fail, ApiResponse
 from messaging.consumer import TaskConsumer
 from config.backend import RabbitMQConfig
 from config.app import AppConfig

@@ -8,7 +8,7 @@ import pika
 
 from config.backend import RabbitMQConfig, MilvusConfig
 from schemas import TaskStatus, Task
-from api.utils import ModelLoader
+from predoc.loader import ModelLoader
 from predoc.pipeline import get_pipeline
 from predoc.storage import MinioStorage
 from backends.rabbitmq import RabbitMQBase
