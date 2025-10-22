@@ -29,6 +29,7 @@ The service operates in one of two modes controlled by `ENABLE_MASSAGE_QUEUE` en
   - `processor.py`: Orchestrates parsing → chunking → embedding
   - `pipeline.py`: Task processing pipelines (e.g., DefaultPDFPipeline)
   - `storage.py`: Storage backend abstraction (MinioStorage, LocalStorage)
+  - `loader.py`: ModelLoader singleton for lazy-loading and caching models
 
 - **`backends/`**: Backend service clients (formerly part of `task/`)
   - `rabbitmq.py`: RabbitMQ base connection handling
@@ -41,7 +42,7 @@ The service operates in one of two modes controlled by `ENABLE_MASSAGE_QUEUE` en
 
 - **`api/`**: FastAPI endpoints
   - `api.py`: Main application with routes for `/preprocess`, `/parser`, `/chunker`, `/embedding`, `/retrieval`
-  - `utils.py`: ModelLoader singleton for model caching
+  - `utils.py`: API response helper functions (api_success, api_fail, ApiResponse)
   - `search.py`: Document retrieval functionality (formerly `retrieve/search.py`)
 
 - **`config/`**: Configuration management (Pydantic-based)
@@ -195,7 +196,7 @@ docker run -v $(pwd)/config.yaml:/app/config.yaml --gpus all \
   - `Parser(storage=None)` for local-only mode (no upload)
 
 ### Model Loading
-- `ModelLoader` in `api/utils.py` uses singleton pattern with lazy-loading
+- `ModelLoader` in `predoc/loader.py` uses singleton pattern with lazy-loading
 - Models are cached in memory after first access
 - **Parser Access**:
   - `loader.parser`: Property access (backward compatible, no storage)
@@ -268,6 +269,49 @@ The project uses YAML-based configuration with environment variable override sup
 
 ## Recent Refactoring History
 
+### 2025-10: ModelLoader Relocation - Better Separation of Concerns
+
+**What Changed**:
+- Moved `ModelLoader` class from `api/utils.py` to `predoc/loader.py`
+- Updated `api/utils.py` to contain only API response helpers (`api_success`, `api_fail`, `ApiResponse`)
+- Updated all imports across 4 files: `api/api.py`, `api/search.py`, `messaging/consumer.py`, `predoc/pipeline.py`
+
+**Rationale**:
+`ModelLoader` is a core component for managing model lifecycle, not an API-specific utility:
+
+| Aspect                   | Before (api/utils.py)                   | After (predoc/loader.py)                  |
+| ------------------------ | --------------------------------------- | ----------------------------------------- |
+| **Module Purpose**       | ❌ Mixed: API helpers + Model management | ✅ Clear: Focused on model loading         |
+| **Import Path**          | ❌ `from api.utils import ModelLoader`   | ✅ `from predoc.loader import ModelLoader` |
+| **Dependency Direction** | ❌ Core depends on API layer             | ✅ API depends on Core layer               |
+| **Reusability**          | ❌ Implies API-only usage                | ✅ Available to all modules                |
+| **Layer Architecture**   | ❌ Violates layering                     | ✅ Follows clean architecture              |
+
+**Benefits**:
+- ✅ **Clearer Responsibility**: `api/utils.py` now focused solely on API response formatting
+- ✅ **Better Layering**: Core functionality (`predoc/`) no longer depends on API layer
+- ✅ **Improved Discoverability**: Model management logic grouped with other core components
+- ✅ **Reusability**: CLI tools or scripts can use ModelLoader without importing API code
+
+**Migration Guide**:
+```python
+# Old import (no longer works)
+from api.utils import ModelLoader
+
+# New import (correct)
+from predoc.loader import ModelLoader
+
+# API response helpers (still in api/utils)
+from api.utils import api_success, api_fail, ApiResponse
+```
+
+**Files Modified**: 6 files, +127/-123 lines
+- New: `predoc/loader.py` (+127 lines, ModelLoader class)
+- Updated: `api/utils.py` (-123 lines, removed ModelLoader)
+- Import updates: `api/api.py`, `api/search.py`, `messaging/consumer.py`, `predoc/pipeline.py`
+
+---
+
 ### 2025-10: Dead Code Removal - messaging/preprocess.py
 
 **What Changed**:
@@ -276,14 +320,14 @@ The project uses YAML-based configuration with environment variable override sup
 **Rationale**:
 The `preprocess()` function in this module was completely superseded by `TaskConsumer._process_task()` and had not been updated to follow recent architectural changes:
 
-| Issue | preprocess.py | TaskConsumer._process_task() |
-|-------|---------------|------------------------------|
-| **Pipeline Selection** | ❌ Hardcoded `DefaultPDFPipeline` | ✅ Dynamic via `get_pipeline(task_type)` |
-| **Storage Injection** | ❌ Missing (2025-10 refactor) | ✅ Full `storage` parameter support |
-| **Thread Safety** | ❌ None | ✅ `add_callback_threadsafe()` |
-| **Error Handling** | ❌ Simple exception propagation | ✅ Publishes FAILED status to result queue |
-| **Flexibility** | ❌ Fixed parameters | ✅ Dynamic collection/partition selection |
-| **Usage** | ❌ Zero imports found | ✅ Core consumer logic |
+| Issue                  | preprocess.py                    | TaskConsumer._process_task()              |
+| ---------------------- | -------------------------------- | ----------------------------------------- |
+| **Pipeline Selection** | ❌ Hardcoded `DefaultPDFPipeline` | ✅ Dynamic via `get_pipeline(task_type)`   |
+| **Storage Injection**  | ❌ Missing (2025-10 refactor)     | ✅ Full `storage` parameter support        |
+| **Thread Safety**      | ❌ None                           | ✅ `add_callback_threadsafe()`             |
+| **Error Handling**     | ❌ Simple exception propagation   | ✅ Publishes FAILED status to result queue |
+| **Flexibility**        | ❌ Fixed parameters               | ✅ Dynamic collection/partition selection  |
+| **Usage**              | ❌ Zero imports found             | ✅ Core consumer logic                     |
 
 **Benefits**:
 - ✅ **Eliminates Confusion**: Prevents accidental use of outdated interface

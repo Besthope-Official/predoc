@@ -5,7 +5,7 @@ from abc import ABC, abstractmethod
 from typing import Tuple, List, Optional, Union, Type
 
 from schemas.document import Document
-from api.utils import ModelLoader
+from predoc.loader import ModelLoader
 from predoc.processor import PDFProcessor
 from predoc.chunker import LLMChunker
 from predoc.parser import YoloParser

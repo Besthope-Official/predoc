@@ -16,6 +16,12 @@ This document provides detailed configuration reference for the PreDoc service.
    python run.py
    ```
 
+## External Services
+
+- Milvus(Required): vector db backend
+- MinIO: external storage for parsing, can be set to localStorage
+- RabbitMQ: message queue for async mode
+
 ## Configuration Priority
 
 Configuration values are loaded in the following order (higher priority overrides lower):
